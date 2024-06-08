@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 	"testing"
 	"time"
 
@@ -164,7 +165,12 @@ func TestService(t *testing.T) { //nolint:funlen
 
 func TestServiceMetrics(t *testing.T) { //nolint:paralleltest
 	res := make(map[string]hc.Status)
-	setStatus := func(id string, status hc.Status) { res[id] = status }
+	mu := new(sync.Mutex)
+	setStatus := func(id string, status hc.Status) {
+		mu.Lock()
+		res[id] = status
+		mu.Unlock()
+	}
 
 	hcInst, err := hc.New(hc.NewOptions(hc.WithSetCheckStatus(setStatus)))
 	require.NoError(t, err)
