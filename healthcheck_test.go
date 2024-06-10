@@ -9,9 +9,40 @@ import (
 	"time"
 
 	hc "github.com/kazhuravlev/healthcheck"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
+
+func requireNoError(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		return
+	}
+
+	t.Errorf("Received unexpected error:\n%+v\n", err)
+	t.FailNow()
+}
+
+func requireTrue(t *testing.T, val bool, msg string) {
+	t.Helper()
+	if val {
+		return
+	}
+
+	t.Error(msg)
+	t.FailNow()
+}
+
+func requireReportEqual(t *testing.T, expected, actual hc.Report) {
+	t.Helper()
+
+	requireTrue(t, expected.Status == actual.Status, "unexpected status")
+	requireTrue(t, len(expected.Checks) == len(actual.Checks), "unexpected checks count")
+
+	for i := range expected.Checks {
+		requireTrue(t, expected.Checks[i].Name == actual.Checks[i].Name, "unexpected check name")
+		requireTrue(t, expected.Checks[i].Status == actual.Checks[i].Status, "unexpected check status")
+		requireTrue(t, expected.Checks[i].Error == actual.Checks[i].Error, "unexpected check error")
+	}
+}
 
 func simpleCheck(name string, err error) hc.ICheck { //nolint:ireturn,nolintlint
 	return hc.NewBasic(name, time.Second, func(ctx context.Context) error { return err })
@@ -21,7 +52,7 @@ func hcWithChecks(t *testing.T, checks ...hc.ICheck) *hc.Healthcheck {
 	t.Helper()
 
 	hcInst, err := hc.New()
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	for i := range checks {
 		hcInst.Register(context.TODO(), checks[i])
@@ -35,7 +66,7 @@ func TestService(t *testing.T) { //nolint:funlen
 		t.Parallel()
 
 		res := hcWithChecks(t).RunAllChecks(context.Background())
-		assert.Equal(t, hc.Report{
+		requireReportEqual(t, hc.Report{
 			Status: hc.StatusUp,
 			Checks: []hc.CheckStatus{},
 		}, res)
@@ -48,7 +79,7 @@ func TestService(t *testing.T) { //nolint:funlen
 		cancel()
 
 		res := hcWithChecks(t, simpleCheck("always_ok", nil)).RunAllChecks(ctx)
-		require.Equal(t, hc.Report{
+		requireReportEqual(t, hc.Report{
 			Status: hc.StatusDown,
 			Checks: []hc.CheckStatus{
 				{Name: "always_ok", Status: hc.StatusDown, Error: "context canceled"},
@@ -64,7 +95,7 @@ func TestService(t *testing.T) { //nolint:funlen
 			simpleCheck("CHECK2", nil),
 			simpleCheck("Check-3", nil),
 		).RunAllChecks(context.Background())
-		require.Equal(t, hc.Report{
+		requireReportEqual(t, hc.Report{
 			Status: hc.StatusUp,
 			Checks: []hc.CheckStatus{
 				{Name: "check1", Status: hc.StatusUp, Error: ""},
@@ -83,7 +114,7 @@ func TestService(t *testing.T) { //nolint:funlen
 			simpleCheck("Check1", nil),
 			simpleCheck("check1", nil),
 		).RunAllChecks(context.Background())
-		require.Equal(t, hc.Report{
+		requireReportEqual(t, hc.Report{
 			Status: hc.StatusUp,
 			Checks: []hc.CheckStatus{
 				{Name: "check1", Status: hc.StatusUp, Error: ""},
@@ -111,7 +142,7 @@ func TestService(t *testing.T) { //nolint:funlen
 		)
 
 		res := hcInst.RunAllChecks(context.Background())
-		require.Equal(t, hc.Report{
+		requireReportEqual(t, hc.Report{
 			Status: hc.StatusDown,
 			Checks: []hc.CheckStatus{
 				{Name: "always_ok", Status: hc.StatusUp, Error: ""},
@@ -129,7 +160,7 @@ func TestService(t *testing.T) { //nolint:funlen
 
 		t.Run("failed_by_default", func(t *testing.T) {
 			res := hcInst.RunAllChecks(context.Background())
-			require.Equal(t, hc.Report{
+			requireReportEqual(t, hc.Report{
 				Status: hc.StatusDown,
 				Checks: []hc.CheckStatus{
 					{Name: "some_system", Status: hc.StatusDown, Error: "initial status"},
@@ -141,7 +172,7 @@ func TestService(t *testing.T) { //nolint:funlen
 			manualCheck.SetErr(nil)
 
 			res := hcInst.RunAllChecks(context.Background())
-			require.Equal(t, hc.Report{
+			requireReportEqual(t, hc.Report{
 				Status: hc.StatusUp,
 				Checks: []hc.CheckStatus{
 					{Name: "some_system", Status: hc.StatusUp, Error: ""},
@@ -153,7 +184,7 @@ func TestService(t *testing.T) { //nolint:funlen
 			manualCheck.SetErr(fmt.Errorf("the sky was falling: %w", io.EOF))
 
 			res := hcInst.RunAllChecks(context.Background())
-			require.Equal(t, hc.Report{
+			requireReportEqual(t, hc.Report{
 				Status: hc.StatusDown,
 				Checks: []hc.CheckStatus{
 					{Name: "some_system", Status: hc.StatusDown, Error: "the sky was falling: EOF"},
@@ -173,18 +204,14 @@ func TestServiceMetrics(t *testing.T) { //nolint:paralleltest
 	}
 
 	hcInst, err := hc.New(hc.WithCheckStatusFn(setStatus))
-	require.NoError(t, err)
+	requireNoError(t, err)
 
 	hcInst.Register(context.TODO(), hc.NewBasic("check_without_error", time.Second, func(ctx context.Context) error { return nil }))
 	hcInst.Register(context.TODO(), hc.NewBasic("check_with_error", time.Second, func(ctx context.Context) error { return io.EOF }))
 
 	_ = hcInst.RunAllChecks(context.Background())
 
-	assert.Equal(t,
-		map[string]hc.Status{
-			"check_without_error": hc.StatusUp,
-			"check_with_error":    hc.StatusDown,
-		},
-		res,
-	)
+	requireTrue(t, len(res) == 2, "response must contains two elems")
+	requireTrue(t, res["check_without_error"] == hc.StatusUp, "response without error must have status UP")
+	requireTrue(t, res["check_with_error"] == hc.StatusDown, "response without error must have status UP")
 }
