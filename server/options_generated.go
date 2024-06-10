@@ -4,7 +4,7 @@ package server
 import (
 	fmt461e464ebed9 "fmt"
 
-	"github.com/kazhuravlev/healthcheck/healthcheck"
+	"github.com/kazhuravlev/healthcheck"
 	errors461e464ebed9 "github.com/kazhuravlev/options-gen/pkg/errors"
 	validator461e464ebed9 "github.com/kazhuravlev/options-gen/pkg/validator"
 )

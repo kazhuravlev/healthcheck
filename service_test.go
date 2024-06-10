@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	hc "github.com/kazhuravlev/healthcheck/healthcheck"
+	hc "github.com/kazhuravlev/healthcheck"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

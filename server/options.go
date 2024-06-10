@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/kazhuravlev/healthcheck/healthcheck"
+	"github.com/kazhuravlev/healthcheck"
 )
 
 //go:generate options-gen -from-struct=Options -defaults-from=var

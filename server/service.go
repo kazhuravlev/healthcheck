@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/kazhuravlev/healthcheck/healthcheck"
+	"github.com/kazhuravlev/healthcheck"
 	"github.com/labstack/echo/v4"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log/slog"

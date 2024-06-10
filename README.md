@@ -20,7 +20,7 @@ package main
 
 import (
 	"context"
-	"github.com/kazhuravlev/healthcheck/healthcheck"
+	"github.com/kazhuravlev/healthcheck"
 	"github.com/kazhuravlev/healthcheck/server"
 	redis "github.com/redis/go-redis/v9"
 	"time"
