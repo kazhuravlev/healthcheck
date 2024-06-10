@@ -17,10 +17,10 @@ func simpleCheck(name string, err error) hc.ICheck { //nolint:ireturn,nolintlint
 	return hc.NewBasic(name, time.Second, func(ctx context.Context) error { return err })
 }
 
-func hcWithChecks(t *testing.T, checks ...hc.ICheck) *hc.Service {
+func hcWithChecks(t *testing.T, checks ...hc.ICheck) *hc.Healthcheck {
 	t.Helper()
 
-	hcInst, err := hc.New(hc.NewOptions())
+	hcInst, err := hc.New()
 	require.NoError(t, err)
 
 	for i := range checks {
@@ -172,7 +172,7 @@ func TestServiceMetrics(t *testing.T) { //nolint:paralleltest
 		mu.Unlock()
 	}
 
-	hcInst, err := hc.New(hc.NewOptions(hc.WithSetCheckStatus(setStatus)))
+	hcInst, err := hc.New(hc.WithCheckStatusFn(setStatus))
 	require.NoError(t, err)
 
 	hcInst.Register(context.TODO(), hc.NewBasic("check_without_error", time.Second, func(ctx context.Context) error { return nil }))

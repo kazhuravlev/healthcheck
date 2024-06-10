@@ -12,7 +12,7 @@ import (
 //
 // All checks should have a name. Will be better that name will contain only lowercase symbols and lodash.
 // This is allowing to have the same name for CheckStatus and for metrics.
-func (s *Service) Register(ctx context.Context, check ICheck) {
+func (s *Healthcheck) Register(ctx context.Context, check ICheck) {
 	s.checksMu.Lock()
 	defer s.checksMu.Unlock()
 
@@ -44,7 +44,7 @@ CheckID:
 }
 
 // RunAllChecks will run all check immediately.
-func (s *Service) RunAllChecks(ctx context.Context) Report {
+func (s *Healthcheck) RunAllChecks(ctx context.Context) Report {
 	s.checksMu.RLock()
 	defer s.checksMu.RUnlock()
 

@@ -20,34 +20,33 @@ package main
 
 import (
 	"context"
-	"github.com/kazhuravlev/healthcheck"
-	"github.com/kazhuravlev/healthcheck/server"
-	redis "github.com/redis/go-redis/v9"
+	"errors"
+	"math/rand"
 	"time"
+	
+	"github.com/kazhuravlev/healthcheck"
 )
 
 func main() {
 	ctx := context.TODO()
 
 	// 1. Init healthcheck instance. It will store all our checks.
-	hc, _ := healthcheck.New(healthcheck.NewOptions())
+	hc, _ := healthcheck.New()
 
-	// 2. Init some component that important for your system. In this example - redis client. 
-	redisClient := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
-
-	// 3. Register checks for our redis client
+	// 2. Register checks for our redis client
 	hc.Register(ctx, healthcheck.NewBasic("redis", time.Second, func(ctx context.Context) error {
-		return redisClient.Ping(ctx).Err()
+		if rand.Float64() > 0.5 {
+			return errors.New("service is not available")
+		}
+
+		return nil
 	}))
 
-	// 4. Init and run a webserver for integration with Kubernetes.
-	sysServer, _ := server.New(server.NewOptions(
-		server.WithPort(8080),
-		server.WithHealthcheck(hc),
-	))
+	// 3. Init and run a webserver for integration with Kubernetes.
+	sysServer, _ := healthcheck.NewServer(hc, healthcheck.WithPort(8080))
 	_ = sysServer.Run(ctx)
 
-	// 5. Open http://localhost:8080/ready to check the status of your system
+	// 4. Open http://localhost:8080/ready to check the status of your system
 	select {}
 }
 

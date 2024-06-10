@@ -1,32 +1,35 @@
-package server
+package healthcheck
 
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"github.com/kazhuravlev/healthcheck"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log/slog"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 )
 
-type Service struct {
-	opts Options
+type Server struct {
+	opts serverOptions
 }
 
-func New(opts Options) (*Service, error) {
-	if err := opts.Validate(); err != nil {
-		return nil, fmt.Errorf("bad configuration: %w", err)
+func NewServer(hc IHealthcheck, opts ...func(*serverOptions)) (*Server, error) {
+	options := serverOptions{
+		port:        8000,
+		healthcheck: hc,
+		logger:      slog.New(slog.NewJSONHandler(os.Stdout, nil)),
 	}
 
-	return &Service{
-		opts: opts,
-	}, nil
+	for _, opt := range opts {
+		opt(&options)
+	}
+
+	return &Server{opts: options}, nil
 }
 
-func (s *Service) Run(ctx context.Context) error {
+func (s *Server) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/live", s.handleLive)
@@ -58,12 +61,12 @@ func (s *Service) Run(ctx context.Context) error {
 	return nil
 }
 
-func (s *Service) handleLive(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleLive(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *Service) handleReady(w http.ResponseWriter, req *http.Request) {
+func (s *Server) handleReady(w http.ResponseWriter, req *http.Request) {
 	const unknownResp = `{"status":"unknown","checks":[]}`
 
 	ctx := req.Context()
@@ -83,10 +86,10 @@ func (s *Service) handleReady(w http.ResponseWriter, req *http.Request) {
 	default:
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(unknownResp))
-	case healthcheck.StatusUp:
+	case StatusUp:
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(reportJson)
-	case healthcheck.StatusDown:
+	case StatusDown:
 		s.opts.logger.ErrorContext(ctx, "status error", slog.Any("report", report))
 
 		w.WriteHeader(http.StatusInternalServerError)
