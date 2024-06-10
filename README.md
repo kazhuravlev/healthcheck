@@ -9,6 +9,14 @@
 This tools allow you to unlock the kubernetes
 feature [Liveness and Readiness](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/).
 
+## Features
+
+- [Logger](https://github.com/kazhuravlev/healthcheck/blob/7231e37734225a2bad880097b5412d4d7f3e75e7/healthcheck/options_generated.go#L29) to log failed probes
+- [Automatic](https://github.com/kazhuravlev/healthcheck/blob/7231e37734225a2bad880097b5412d4d7f3e75e7/healthcheck/api_checks.go#L20) and [manual](https://github.com/kazhuravlev/healthcheck/blob/7231e37734225a2bad880097b5412d4d7f3e75e7/healthcheck/api_checks.go#L46) checks
+- Respond with all healthchecks status in [JSON format](https://github.com/kazhuravlev/healthcheck/blob/f873c0c90b9c1aa1c7f21c3b992a976e0a81c516/healthcheck/structs.go#L21)
+- [Callback](https://github.com/kazhuravlev/healthcheck/blob/7231e37734225a2bad880097b5412d4d7f3e75e7/healthcheck/options_generated.go#L36) for integrate with metrics or other systems.
+- Integrated [web server](https://github.com/kazhuravlev/healthcheck/blob/7231e37734225a2bad880097b5412d4d7f3e75e7/server/service.go#L19)
+
 ## Quickstart
 
 ```shell
