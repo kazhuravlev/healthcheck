@@ -2,6 +2,7 @@ package healthcheck_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -188,6 +189,64 @@ func TestService(t *testing.T) { //nolint:funlen
 				Status: hc.StatusDown,
 				Checks: []hc.CheckStatus{
 					{Name: "some_system", Status: hc.StatusDown, Error: "the sky was falling: EOF"},
+				},
+			}, res)
+		})
+	})
+
+	t.Run("background_check", func(t *testing.T) {
+		t.Parallel()
+
+		errNotReady := errors.New("not ready")
+		var curError error
+
+		delay := 200 * time.Millisecond
+		bgCheck := hc.NewBackground(
+			"some_system",
+			errNotReady,
+			delay,
+			delay,
+			10*time.Second,
+			func(ctx context.Context) error {
+				return curError
+			},
+		)
+		hcInst := hcWithChecks(t, bgCheck)
+
+		t.Run("initial_error_is_used", func(t *testing.T) {
+			res := hcInst.RunAllChecks(context.Background())
+			requireReportEqual(t, hc.Report{
+				Status: hc.StatusDown,
+				Checks: []hc.CheckStatus{
+					{Name: "some_system", Status: hc.StatusDown, Error: "not ready"},
+				},
+			}, res)
+		})
+
+		// wait for bg check next run
+		time.Sleep(delay)
+
+		t.Run("check_current_error_nil", func(t *testing.T) {
+			res := hcInst.RunAllChecks(context.Background())
+			requireReportEqual(t, hc.Report{
+				Status: hc.StatusUp,
+				Checks: []hc.CheckStatus{
+					{Name: "some_system", Status: hc.StatusUp, Error: ""},
+				},
+			}, res)
+		})
+
+		// set error
+		curError = io.EOF
+		// wait for bg check next run
+		time.Sleep(delay)
+
+		t.Run("change_status_after_each_run", func(t *testing.T) {
+			res := hcInst.RunAllChecks(context.Background())
+			requireReportEqual(t, hc.Report{
+				Status: hc.StatusDown,
+				Checks: []hc.CheckStatus{
+					{Name: "some_system", Status: hc.StatusDown, Error: "EOF"},
 				},
 			}, res)
 		})
