@@ -13,8 +13,9 @@ const (
 )
 
 type CheckState struct {
-	Status Status `json:"status"`
-	Error  string `json:"error"`
+	ActualAt time.Time `json:"actual_at"`
+	Status   Status    `json:"status"`
+	Error    string    `json:"error"`
 }
 
 type Check struct {

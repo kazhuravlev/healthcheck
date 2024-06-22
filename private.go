@@ -34,9 +34,11 @@ func runCheck(ctx context.Context, opts hcOptions, check checkRec) Check {
 	return Check{
 		Name: check.ID,
 		State: CheckState{
-			Status: checkStatus,
-			Error:  checkErr,
+			ActualAt: opts.time.Now(),
+			Status:   checkStatus,
+			Error:    checkErr,
 		},
+		Previous: nil,
 	}
 }
 
