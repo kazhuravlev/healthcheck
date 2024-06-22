@@ -198,6 +198,8 @@ func TestService(t *testing.T) { //nolint:funlen
 		t.Parallel()
 
 		errNotReady := errors.New("not ready")
+
+		curErrorMu := new(sync.Mutex)
 		var curError error
 
 		delay := 200 * time.Millisecond
@@ -208,6 +210,9 @@ func TestService(t *testing.T) { //nolint:funlen
 			delay,
 			10*time.Second,
 			func(ctx context.Context) error {
+				curErrorMu.Lock()
+				defer curErrorMu.Unlock()
+
 				return curError
 			},
 		)
@@ -237,7 +242,9 @@ func TestService(t *testing.T) { //nolint:funlen
 		})
 
 		// set error
+		curErrorMu.Lock()
 		curError = io.EOF
+		curErrorMu.Unlock()
 		// wait for bg check next run
 		time.Sleep(delay)
 
