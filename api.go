@@ -62,7 +62,7 @@ func (s *Healthcheck) RunAllChecks(ctx context.Context) Report {
 			go func(i int, check checkRec) {
 				defer wg.Done()
 
-				checks[i] = runCheck(ctx, s.opts, check)
+				checks[i] = s.runCheck(ctx, s.opts, check)
 			}(i, s.checks[i])
 		}
 

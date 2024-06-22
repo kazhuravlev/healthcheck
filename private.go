@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func runCheck(ctx context.Context, opts hcOptions, check checkRec) Check {
+func (s *Healthcheck) runCheck(ctx context.Context, opts hcOptions, check checkRec) Check {
 	ctx, cancel := context.WithTimeout(ctx, check.Timeout)
 	defer cancel()
 
