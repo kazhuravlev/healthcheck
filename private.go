@@ -31,14 +31,35 @@ func (s *Healthcheck) runCheck(ctx context.Context, check checkRec) Check {
 
 	s.opts.setCheckStatus(check.ID, checkStatus)
 
+	curState := CheckState{
+		ActualAt: s.opts.time.Now(),
+		Status:   checkStatus,
+		Error:    checkErr,
+	}
+
+	prev := make([]CheckState, 0, maxStatesToStore)
+	{
+		s.checksMu.RLock()
+		p := s.checkStates[check.ID]
+		p.Do(func(checkState any) {
+			if checkState == nil {
+				return
+			}
+
+			prev = append(prev, checkState.(CheckState))
+		})
+
+		p = p.Prev()
+		p.Value = curState
+
+		s.checkStates[check.ID] = p
+		s.checksMu.RUnlock()
+	}
+
 	return Check{
-		Name: check.ID,
-		State: CheckState{
-			ActualAt: s.opts.time.Now(),
-			Status:   checkStatus,
-			Error:    checkErr,
-		},
-		Previous: nil,
+		Name:     check.ID,
+		State:    curState,
+		Previous: prev,
 	}
 }
 
