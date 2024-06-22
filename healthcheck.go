@@ -17,6 +17,7 @@ func New(opts ...func(*hcOptions)) (*Healthcheck, error) {
 	options := hcOptions{
 		logger:         slog.New(slog.NewJSONHandler(os.Stdout, nil)),
 		setCheckStatus: func(string, Status) {},
+		time:           realTime{},
 	}
 	for _, opt := range opts {
 		opt(&options)
