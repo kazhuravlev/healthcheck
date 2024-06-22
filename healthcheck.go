@@ -1,6 +1,7 @@
 package healthcheck
 
 import (
+	"container/ring"
 	"log/slog"
 	"os"
 	"sync"
@@ -9,8 +10,9 @@ import (
 type Healthcheck struct {
 	opts hcOptions
 
-	checksMu *sync.RWMutex
-	checks   []checkRec
+	checksMu    *sync.RWMutex
+	checks      []checkRec
+	checkStates map[string]*ring.Ring
 }
 
 func New(opts ...func(*hcOptions)) (*Healthcheck, error) {
@@ -24,8 +26,9 @@ func New(opts ...func(*hcOptions)) (*Healthcheck, error) {
 	}
 
 	return &Healthcheck{
-		opts:     options,
-		checks:   nil,
-		checksMu: new(sync.RWMutex),
+		opts:        options,
+		checksMu:    new(sync.RWMutex),
+		checks:      nil,
+		checkStates: make(map[string]*ring.Ring),
 	}, nil
 }

@@ -1,12 +1,14 @@
 package healthcheck
 
 import (
+	"container/ring"
 	"context"
+	"github.com/kazhuravlev/just"
 	"log/slog"
 	"sync"
-
-	"github.com/kazhuravlev/just"
 )
+
+const maxStatesToStore = 5
 
 // Register will register a check.
 //
@@ -35,6 +37,8 @@ CheckID:
 			goto CheckID
 		}
 	}
+
+	s.checkStates[checkID] = ring.New(maxStatesToStore)
 
 	switch check := check.(type) {
 	case *bgCheck:
