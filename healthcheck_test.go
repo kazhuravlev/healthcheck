@@ -58,7 +58,9 @@ func requireReportEqual(t *testing.T, expected, actual hc.Report) {
 	for i := range expected.Checks {
 		requireTrue(t, expected.Checks[i].Name == actual.Checks[i].Name, "unexpected check name")
 		requireStateEqual(t, expected.Checks[i].State, actual.Checks[i].State)
-		requireTrue(t, len(expected.Checks[i].Previous) == len(actual.Checks[i].Previous), "unexpected previous count error")
+		expLen := len(expected.Checks[i].Previous)
+		actLen := len(actual.Checks[i].Previous)
+		requireTrue(t, expLen == actLen, "unexpected previous count error. Exp (%d) Act (%d)", expLen, actLen)
 		for ii := range expected.Checks[i].Previous {
 			requireStateEqual(t, expected.Checks[i].Previous[ii], actual.Checks[i].Previous[ii])
 		}
