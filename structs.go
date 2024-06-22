@@ -12,15 +12,19 @@ const (
 	StatusDown Status = "down"
 )
 
-type CheckStatus struct {
-	Name   string `json:"name"`
+type CheckState struct {
 	Status Status `json:"status"`
 	Error  string `json:"error"`
 }
 
+type Check struct {
+	Name  string     `json:"name"`
+	State CheckState `json:"state"`
+}
+
 type Report struct {
-	Status Status        `json:"status"`
-	Checks []CheckStatus `json:"checks"`
+	Status Status  `json:"status"`
+	Checks []Check `json:"checks"`
 }
 
 type CheckFn func(ctx context.Context) error

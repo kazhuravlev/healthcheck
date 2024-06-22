@@ -40,8 +40,8 @@ func requireReportEqual(t *testing.T, expected, actual hc.Report) {
 
 	for i := range expected.Checks {
 		requireTrue(t, expected.Checks[i].Name == actual.Checks[i].Name, "unexpected check name")
-		requireTrue(t, expected.Checks[i].Status == actual.Checks[i].Status, "unexpected check status")
-		requireTrue(t, expected.Checks[i].Error == actual.Checks[i].Error, "unexpected check error")
+		requireTrue(t, expected.Checks[i].State.Status == actual.Checks[i].State.Status, "unexpected check status")
+		requireTrue(t, expected.Checks[i].State.Error == actual.Checks[i].State.Error, "unexpected check error")
 	}
 }
 
@@ -69,7 +69,7 @@ func TestService(t *testing.T) { //nolint:funlen
 		res := hcWithChecks(t).RunAllChecks(context.Background())
 		requireReportEqual(t, hc.Report{
 			Status: hc.StatusUp,
-			Checks: []hc.CheckStatus{},
+			Checks: []hc.Check{},
 		}, res)
 	})
 
@@ -82,8 +82,8 @@ func TestService(t *testing.T) { //nolint:funlen
 		res := hcWithChecks(t, simpleCheck("always_ok", nil)).RunAllChecks(ctx)
 		requireReportEqual(t, hc.Report{
 			Status: hc.StatusDown,
-			Checks: []hc.CheckStatus{
-				{Name: "always_ok", Status: hc.StatusDown, Error: "context canceled"},
+			Checks: []hc.Check{
+				{Name: "always_ok", State: hc.CheckState{Status: hc.StatusDown, Error: "context canceled"}},
 			},
 		}, res)
 	})
@@ -98,10 +98,10 @@ func TestService(t *testing.T) { //nolint:funlen
 		).RunAllChecks(context.Background())
 		requireReportEqual(t, hc.Report{
 			Status: hc.StatusUp,
-			Checks: []hc.CheckStatus{
-				{Name: "check1", Status: hc.StatusUp, Error: ""},
-				{Name: "check2", Status: hc.StatusUp, Error: ""},
-				{Name: "check_3", Status: hc.StatusUp, Error: ""},
+			Checks: []hc.Check{
+				{Name: "check1", State: hc.CheckState{Status: hc.StatusUp, Error: ""}},
+				{Name: "check2", State: hc.CheckState{Status: hc.StatusUp, Error: ""}},
+				{Name: "check_3", State: hc.CheckState{Status: hc.StatusUp, Error: ""}},
 			},
 		}, res)
 	})
@@ -117,11 +117,11 @@ func TestService(t *testing.T) { //nolint:funlen
 		).RunAllChecks(context.Background())
 		requireReportEqual(t, hc.Report{
 			Status: hc.StatusUp,
-			Checks: []hc.CheckStatus{
-				{Name: "check1", Status: hc.StatusUp, Error: ""},
-				{Name: "check1_x", Status: hc.StatusUp, Error: ""},
-				{Name: "check1_x_x", Status: hc.StatusUp, Error: ""},
-				{Name: "check1_x_x_x", Status: hc.StatusUp, Error: ""},
+			Checks: []hc.Check{
+				{Name: "check1", State: hc.CheckState{Status: hc.StatusUp, Error: ""}},
+				{Name: "check1_x", State: hc.CheckState{Status: hc.StatusUp, Error: ""}},
+				{Name: "check1_x_x", State: hc.CheckState{Status: hc.StatusUp, Error: ""}},
+				{Name: "check1_x_x_x", State: hc.CheckState{Status: hc.StatusUp, Error: ""}},
 			},
 		}, res)
 	})
@@ -145,10 +145,10 @@ func TestService(t *testing.T) { //nolint:funlen
 		res := hcInst.RunAllChecks(context.Background())
 		requireReportEqual(t, hc.Report{
 			Status: hc.StatusDown,
-			Checks: []hc.CheckStatus{
-				{Name: "always_ok", Status: hc.StatusUp, Error: ""},
-				{Name: "always_ok_x", Status: hc.StatusUp, Error: ""},
-				{Name: "context_timeout", Status: hc.StatusDown, Error: "context deadline exceeded"},
+			Checks: []hc.Check{
+				{Name: "always_ok", State: hc.CheckState{Status: hc.StatusUp, Error: ""}},
+				{Name: "always_ok_x", State: hc.CheckState{Status: hc.StatusUp, Error: ""}},
+				{Name: "context_timeout", State: hc.CheckState{Status: hc.StatusDown, Error: "context deadline exceeded"}},
 			},
 		}, res)
 	})
@@ -163,8 +163,8 @@ func TestService(t *testing.T) { //nolint:funlen
 			res := hcInst.RunAllChecks(context.Background())
 			requireReportEqual(t, hc.Report{
 				Status: hc.StatusDown,
-				Checks: []hc.CheckStatus{
-					{Name: "some_system", Status: hc.StatusDown, Error: "initial status"},
+				Checks: []hc.Check{
+					{Name: "some_system", State: hc.CheckState{Status: hc.StatusDown, Error: "initial status"}},
 				},
 			}, res)
 		})
@@ -175,8 +175,8 @@ func TestService(t *testing.T) { //nolint:funlen
 			res := hcInst.RunAllChecks(context.Background())
 			requireReportEqual(t, hc.Report{
 				Status: hc.StatusUp,
-				Checks: []hc.CheckStatus{
-					{Name: "some_system", Status: hc.StatusUp, Error: ""},
+				Checks: []hc.Check{
+					{Name: "some_system", State: hc.CheckState{Status: hc.StatusUp, Error: ""}},
 				},
 			}, res)
 		})
@@ -187,8 +187,8 @@ func TestService(t *testing.T) { //nolint:funlen
 			res := hcInst.RunAllChecks(context.Background())
 			requireReportEqual(t, hc.Report{
 				Status: hc.StatusDown,
-				Checks: []hc.CheckStatus{
-					{Name: "some_system", Status: hc.StatusDown, Error: "the sky was falling: EOF"},
+				Checks: []hc.Check{
+					{Name: "some_system", State: hc.CheckState{Status: hc.StatusDown, Error: "the sky was falling: EOF"}},
 				},
 			}, res)
 		})
@@ -222,8 +222,8 @@ func TestService(t *testing.T) { //nolint:funlen
 			res := hcInst.RunAllChecks(context.Background())
 			requireReportEqual(t, hc.Report{
 				Status: hc.StatusDown,
-				Checks: []hc.CheckStatus{
-					{Name: "some_system", Status: hc.StatusDown, Error: "not ready"},
+				Checks: []hc.Check{
+					{Name: "some_system", State: hc.CheckState{Status: hc.StatusDown, Error: "not ready"}},
 				},
 			}, res)
 		})
@@ -235,8 +235,8 @@ func TestService(t *testing.T) { //nolint:funlen
 			res := hcInst.RunAllChecks(context.Background())
 			requireReportEqual(t, hc.Report{
 				Status: hc.StatusUp,
-				Checks: []hc.CheckStatus{
-					{Name: "some_system", Status: hc.StatusUp, Error: ""},
+				Checks: []hc.Check{
+					{Name: "some_system", State: hc.CheckState{Status: hc.StatusUp, Error: ""}},
 				},
 			}, res)
 		})
@@ -252,8 +252,8 @@ func TestService(t *testing.T) { //nolint:funlen
 			res := hcInst.RunAllChecks(context.Background())
 			requireReportEqual(t, hc.Report{
 				Status: hc.StatusDown,
-				Checks: []hc.CheckStatus{
-					{Name: "some_system", Status: hc.StatusDown, Error: "EOF"},
+				Checks: []hc.Check{
+					{Name: "some_system", State: hc.CheckState{Status: hc.StatusDown, Error: "EOF"}},
 				},
 			}, res)
 		})

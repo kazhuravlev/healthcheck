@@ -11,7 +11,7 @@ import (
 // Register will register a check.
 //
 // All checks should have a name. Will be better that name will contain only lowercase symbols and lodash.
-// This is allowing to have the same name for CheckStatus and for metrics.
+// This is allowing to have the same name for Check and for metrics.
 func (s *Healthcheck) Register(ctx context.Context, check ICheck) {
 	s.checksMu.Lock()
 	defer s.checksMu.Unlock()
@@ -53,7 +53,7 @@ func (s *Healthcheck) RunAllChecks(ctx context.Context) Report {
 	s.checksMu.RLock()
 	defer s.checksMu.RUnlock()
 
-	checks := make([]CheckStatus, len(s.checks))
+	checks := make([]Check, len(s.checks))
 	{
 		wg := new(sync.WaitGroup)
 		wg.Add(len(s.checks))
@@ -69,8 +69,8 @@ func (s *Healthcheck) RunAllChecks(ctx context.Context) Report {
 		wg.Wait()
 	}
 
-	failedChecks := just.SliceFilter(checks, func(s CheckStatus) bool {
-		return s.Status == StatusDown
+	failedChecks := just.SliceFilter(checks, func(s Check) bool {
+		return s.State.Status == StatusDown
 	})
 
 	status := just.If(len(failedChecks) == 0, StatusUp, StatusDown)
