@@ -32,6 +32,13 @@ func requireTrue(t *testing.T, val bool, msg string) {
 	t.FailNow()
 }
 
+func requireStateEqual(t *testing.T, exp, actual hc.CheckState) {
+	t.Helper()
+
+	requireTrue(t, exp.Status == actual.Status, "unexpected check status")
+	requireTrue(t, exp.Error == actual.Error, "unexpected check error")
+}
+
 func requireReportEqual(t *testing.T, expected, actual hc.Report) {
 	t.Helper()
 
@@ -40,8 +47,11 @@ func requireReportEqual(t *testing.T, expected, actual hc.Report) {
 
 	for i := range expected.Checks {
 		requireTrue(t, expected.Checks[i].Name == actual.Checks[i].Name, "unexpected check name")
-		requireTrue(t, expected.Checks[i].State.Status == actual.Checks[i].State.Status, "unexpected check status")
-		requireTrue(t, expected.Checks[i].State.Error == actual.Checks[i].State.Error, "unexpected check error")
+		requireStateEqual(t, expected.Checks[i].State, actual.Checks[i].State)
+		requireTrue(t, len(expected.Checks[i].Previous) == len(actual.Checks[i].Previous), "unexpected previous count error")
+		for ii := range expected.Checks[i].Previous {
+			requireStateEqual(t, expected.Checks[i].Previous[ii], actual.Checks[i].Previous[ii])
+		}
 	}
 }
 

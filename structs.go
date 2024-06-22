@@ -18,8 +18,9 @@ type CheckState struct {
 }
 
 type Check struct {
-	Name  string     `json:"name"`
-	State CheckState `json:"state"`
+	Name     string       `json:"name"`
+	State    CheckState   `json:"state"`
+	Previous []CheckState `json:"previous"`
 }
 
 type Report struct {
