@@ -66,3 +66,67 @@ func (c *manualCheck) check(_ context.Context) result {
 
 	return result{Err: c.err}
 }
+
+type bgCheck struct {
+	name   string
+	period time.Duration
+	delay  time.Duration
+	ttl    time.Duration
+	fn     CheckFn
+
+	muErr *sync.RWMutex
+	err   error
+}
+
+// NewBackground will create a check that runs in background. Usually used for slow or expensive checks.
+// Note: period should be greater than timeout.
+//
+//	hc, _ := healthcheck.New(...)
+//	hc.Register(healthcheck.NewBackground("some_subsystem"))
+func NewBackground(name string, initialErr error, delay, period, timeout time.Duration, fn CheckFn) *bgCheck {
+	return &bgCheck{
+		name: name,
+
+		period: period,
+		delay:  delay,
+		ttl:    timeout,
+		fn:     fn,
+		muErr:  new(sync.RWMutex),
+		err:    initialErr,
+	}
+}
+
+func (c *bgCheck) run() {
+	go func() {
+		time.Sleep(c.delay)
+
+		t := time.NewTimer(c.period)
+		defer t.Stop()
+
+		for {
+			func() {
+				ctx, cancel := context.WithTimeout(context.Background(), c.ttl)
+				defer cancel()
+
+				err := c.fn(ctx)
+
+				c.muErr.Lock()
+				c.err = err
+				c.muErr.Unlock()
+			}()
+
+			select {
+			case <-t.C:
+			}
+		}
+	}()
+}
+
+func (c *bgCheck) id() string             { return c.name }
+func (c *bgCheck) timeout() time.Duration { return time.Hour }
+func (c *bgCheck) check(_ context.Context) result {
+	c.muErr.RLock()
+	defer c.muErr.RUnlock()
+
+	return result{Err: c.err}
+}
