@@ -31,13 +31,13 @@ func requireNoError(t *testing.T, err error) {
 	t.FailNow()
 }
 
-func requireTrue(t *testing.T, val bool, msg string) {
+func requireTrue(t *testing.T, val bool, msg string, args ...any) {
 	t.Helper()
 	if val {
 		return
 	}
 
-	t.Error(msg)
+	t.Error(fmt.Sprintf(msg, args...))
 	t.FailNow()
 }
 
