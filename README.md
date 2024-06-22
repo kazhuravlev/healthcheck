@@ -41,7 +41,7 @@ func main() {
 	// 1. Init healthcheck instance. It will store all our checks.
 	hc, _ := healthcheck.New()
 
-	// 2. Register checks for our redis client
+	// 2. Register checks that will random respond with an error.
 	hc.Register(ctx, healthcheck.NewBasic("redis", time.Second, func(ctx context.Context) error {
 		if rand.Float64() > 0.5 {
 			return errors.New("service is not available")
