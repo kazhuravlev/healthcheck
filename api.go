@@ -36,6 +36,11 @@ CheckID:
 		}
 	}
 
+	switch check := check.(type) {
+	case *bgCheck:
+		check.run()
+	}
+
 	s.checks = append(s.checks, checkRec{
 		ID:      checkID,
 		CheckFn: check.check,
