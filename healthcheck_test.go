@@ -198,7 +198,13 @@ func TestService(t *testing.T) { //nolint:funlen
 			requireReportEqual(t, hc.Report{
 				Status: hc.StatusUp,
 				Checks: []hc.Check{
-					{Name: "some_system", State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusUp, Error: ""}},
+					{
+						Name:  "some_system",
+						State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusUp, Error: ""},
+						Previous: []hc.CheckState{
+							{ActualAt: timeNow, Status: hc.StatusDown, Error: "initial status"}, // from prev test
+						},
+					},
 				},
 			}, res)
 		})
@@ -210,7 +216,14 @@ func TestService(t *testing.T) { //nolint:funlen
 			requireReportEqual(t, hc.Report{
 				Status: hc.StatusDown,
 				Checks: []hc.Check{
-					{Name: "some_system", State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusDown, Error: "the sky was falling: EOF"}},
+					{
+						Name:  "some_system",
+						State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusDown, Error: "the sky was falling: EOF"},
+						Previous: []hc.CheckState{
+							{ActualAt: timeNow, Status: hc.StatusUp, Error: ""},                 // from prev test
+							{ActualAt: timeNow, Status: hc.StatusDown, Error: "initial status"}, // from prev test
+						},
+					},
 				},
 			}, res)
 		})
@@ -258,7 +271,13 @@ func TestService(t *testing.T) { //nolint:funlen
 			requireReportEqual(t, hc.Report{
 				Status: hc.StatusUp,
 				Checks: []hc.Check{
-					{Name: "some_system", State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusUp, Error: ""}},
+					{
+						Name:  "some_system",
+						State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusUp, Error: ""},
+						Previous: []hc.CheckState{
+							{ActualAt: timeNow, Status: hc.StatusDown, Error: "not ready"}, // from prev test
+						},
+					},
 				},
 			}, res)
 		})
@@ -275,7 +294,14 @@ func TestService(t *testing.T) { //nolint:funlen
 			requireReportEqual(t, hc.Report{
 				Status: hc.StatusDown,
 				Checks: []hc.Check{
-					{Name: "some_system", State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusDown, Error: "EOF"}},
+					{
+						Name:  "some_system",
+						State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusDown, Error: "EOF"},
+						Previous: []hc.CheckState{
+							{ActualAt: timeNow, Status: hc.StatusUp, Error: ""},            // from prev test
+							{ActualAt: timeNow, Status: hc.StatusDown, Error: "not ready"}, // from prev test
+						},
+					},
 				},
 			}, res)
 		})
