@@ -12,7 +12,7 @@ feature [Liveness and Readiness](https://kubernetes.io/docs/tasks/configure-pod-
 ## Features
 
 - Logger to log failed probes
-- Automatic and manual checks
+- Automatic, manual and background checks
 - Respond with all healthchecks status in JSON format
 - Callback for integrate with metrics or other systems
 - Integrated web server
@@ -22,6 +22,8 @@ feature [Liveness and Readiness](https://kubernetes.io/docs/tasks/configure-pod-
 ```shell
 go get -u github.com/kazhuravlev/healthckeck
 ```
+
+Check an [examples](./examples/example.go).
 
 ```go
 package main
