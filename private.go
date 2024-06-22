@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func (s *Healthcheck) runCheck(ctx context.Context, opts hcOptions, check checkRec) Check {
+func (s *Healthcheck) runCheck(ctx context.Context, check checkRec) Check {
 	ctx, cancel := context.WithTimeout(ctx, check.Timeout)
 	defer cancel()
 
@@ -29,12 +29,12 @@ func (s *Healthcheck) runCheck(ctx context.Context, opts hcOptions, check checkR
 		}
 	}
 
-	opts.setCheckStatus(check.ID, checkStatus)
+	s.opts.setCheckStatus(check.ID, checkStatus)
 
 	return Check{
 		Name: check.ID,
 		State: CheckState{
-			ActualAt: opts.time.Now(),
+			ActualAt: s.opts.time.Now(),
 			Status:   checkStatus,
 			Error:    checkErr,
 		},
