@@ -10,7 +10,7 @@ type Healthcheck struct {
 	opts hcOptions
 
 	checksMu *sync.RWMutex
-	checks   []checkRec
+	checks   []checkContainer
 }
 
 func New(opts ...func(*hcOptions)) (*Healthcheck, error) {
@@ -24,7 +24,7 @@ func New(opts ...func(*hcOptions)) (*Healthcheck, error) {
 
 	return &Healthcheck{
 		opts:     options,
-		checks:   nil,
 		checksMu: new(sync.RWMutex),
+		checks:   nil,
 	}, nil
 }

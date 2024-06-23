@@ -2,39 +2,70 @@ package healthcheck
 
 import (
 	"context"
+	"github.com/kazhuravlev/healthcheck/internal/logr"
+	"github.com/kazhuravlev/just"
 	"strings"
+	"time"
 )
 
-func runCheck(ctx context.Context, opts hcOptions, check checkRec) CheckStatus {
-	ctx, cancel := context.WithTimeout(ctx, check.Timeout)
+func (s *Healthcheck) runCheck(ctx context.Context, check checkContainer) Check {
+	ctx, cancel := context.WithTimeout(ctx, check.Check.timeout())
 	defer cancel()
 
-	resCh := make(chan result, 1)
+	resCh := make(chan logr.Rec, 1)
 	go func() {
 		defer close(resCh)
-		resCh <- check.CheckFn(ctx)
+		resCh <- check.Check.check(ctx)
 	}()
 
-	checkStatus := StatusUp
-	var checkErr string
+	rec := logr.Rec{
+		Time:  time.Now(),
+		Error: nil,
+	}
 
 	select {
 	case <-ctx.Done():
-		checkErr = ctx.Err().Error()
-		checkStatus = StatusDown
-	case res := <-resCh:
-		if res.Err != nil {
-			checkErr = res.Err.Error()
-			checkStatus = StatusDown
+		rec = logr.Rec{
+			Time:  time.Now(),
+			Error: ctx.Err(),
 		}
+	case rec = <-resCh:
 	}
 
-	opts.setCheckStatus(check.ID, checkStatus)
+	status := StatusUp
+	errText := ""
+	if rec.Error != nil {
+		status = StatusDown
+		errText = rec.Error.Error()
+	}
 
-	return CheckStatus{
-		Name:   check.ID,
-		Status: checkStatus,
-		Error:  checkErr,
+	// TODO(zhuravlev): run on manual and bg checks.
+	s.opts.setCheckStatus(check.ID, status)
+
+	prev := just.SliceMap(check.Check.log(), func(rec logr.Rec) CheckState {
+		status := StatusUp
+		errText := ""
+
+		if rec.Error != nil {
+			errText = rec.Error.Error()
+			status = StatusDown
+		}
+
+		return CheckState{
+			ActualAt: rec.Time,
+			Status:   status,
+			Error:    errText,
+		}
+	})
+
+	return Check{
+		Name: check.ID,
+		State: CheckState{
+			ActualAt: rec.Time,
+			Status:   status,
+			Error:    errText,
+		},
+		Previous: prev,
 	}
 }
 

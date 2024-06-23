@@ -3,14 +3,24 @@ package healthcheck
 import (
 	"context"
 	"errors"
-	"sync"
+	"github.com/kazhuravlev/healthcheck/internal/logr"
 	"time"
 )
+
+var (
+	_ ICheck = (*basicCheck)(nil)
+	_ ICheck = (*manualCheck)(nil)
+	_ ICheck = (*bgCheck)(nil)
+)
+
+// errInitial used as initial error for some checks.
+var errInitial = errors.New("initial")
 
 type basicCheck struct {
 	name string
 	ttl  time.Duration
 	fn   CheckFn
+	logg *logr.Ring
 }
 
 // NewBasic creates a basic check. This check will only be performed when RunAllChecks is called.
@@ -22,18 +32,28 @@ func NewBasic(name string, timeout time.Duration, fn CheckFn) *basicCheck {
 		name: name,
 		ttl:  timeout,
 		fn:   fn,
+		logg: logr.New(),
 	}
 }
 
-func (c *basicCheck) id() string                       { return c.name }
-func (c *basicCheck) timeout() time.Duration           { return c.ttl }
-func (c *basicCheck) check(ctx context.Context) result { return result{Err: c.fn(ctx)} }
+func (c *basicCheck) id() string             { return c.name }
+func (c *basicCheck) timeout() time.Duration { return c.ttl }
+func (c *basicCheck) check(ctx context.Context) logr.Rec {
+	res := logr.Rec{
+		Time:  time.Now(),
+		Error: c.fn(ctx),
+	}
+	c.logg.Put(res)
+
+	return res
+}
+func (c *basicCheck) log() []logr.Rec {
+	return c.logg.SlicePrev()
+}
 
 type manualCheck struct {
 	name string
-
-	mu  *sync.RWMutex
-	err error
+	logg *logr.Ring
 }
 
 // NewManual create new check, that can be managed by client. Marked as failed by default.
@@ -44,27 +64,35 @@ type manualCheck struct {
 //	hc.Register(check)
 //	check.SetError(errors.New("service unavailable"))
 func NewManual(name string) *manualCheck {
-	return &manualCheck{
+	check := &manualCheck{
 		name: name,
-		mu:   new(sync.RWMutex),
-		err:  errors.New("initial status"), //nolint:goerr113 // This error should not be handled
+		logg: logr.New(),
 	}
+
+	check.SetErr(errInitial)
+
+	return check
 }
 
 func (c *manualCheck) SetErr(err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.err = err
+	c.logg.Put(logr.Rec{
+		Time:  time.Now(),
+		Error: err,
+	})
 }
 
 func (c *manualCheck) id() string             { return c.name }
 func (c *manualCheck) timeout() time.Duration { return time.Hour }
-func (c *manualCheck) check(_ context.Context) result {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+func (c *manualCheck) check(_ context.Context) logr.Rec {
+	rec, ok := c.logg.GetLast()
+	if !ok {
+		panic("manual check must have initial state")
+	}
 
-	return result{Err: c.err}
+	return rec
+}
+func (c *manualCheck) log() []logr.Rec {
+	return c.logg.SlicePrev()
 }
 
 type bgCheck struct {
@@ -73,9 +101,7 @@ type bgCheck struct {
 	delay  time.Duration
 	ttl    time.Duration
 	fn     CheckFn
-
-	muErr *sync.RWMutex
-	err   error
+	logg   *logr.Ring
 }
 
 // NewBackground will create a check that runs in background. Usually used for slow or expensive checks.
@@ -84,16 +110,21 @@ type bgCheck struct {
 //	hc, _ := healthcheck.New(...)
 //	hc.Register(healthcheck.NewBackground("some_subsystem"))
 func NewBackground(name string, initialErr error, delay, period, timeout time.Duration, fn CheckFn) *bgCheck {
-	return &bgCheck{
-		name: name,
-
+	check := &bgCheck{
+		name:   name,
 		period: period,
 		delay:  delay,
 		ttl:    timeout,
 		fn:     fn,
-		muErr:  new(sync.RWMutex),
-		err:    initialErr,
+		logg:   logr.New(),
 	}
+
+	check.logg.Put(logr.Rec{
+		Time:  time.Now(),
+		Error: initialErr,
+	})
+
+	return check
 }
 
 func (c *bgCheck) run() {
@@ -110,9 +141,10 @@ func (c *bgCheck) run() {
 
 				err := c.fn(ctx)
 
-				c.muErr.Lock()
-				c.err = err
-				c.muErr.Unlock()
+				c.logg.Put(logr.Rec{
+					Time:  time.Now(),
+					Error: err,
+				})
 			}()
 
 			select {
@@ -124,9 +156,17 @@ func (c *bgCheck) run() {
 
 func (c *bgCheck) id() string             { return c.name }
 func (c *bgCheck) timeout() time.Duration { return time.Hour }
-func (c *bgCheck) check(_ context.Context) result {
-	c.muErr.RLock()
-	defer c.muErr.RUnlock()
+func (c *bgCheck) check(_ context.Context) logr.Rec {
+	val, ok := c.logg.GetLast()
+	if !ok {
+		return logr.Rec{
+			Time:  time.Now(),
+			Error: nil,
+		}
+	}
 
-	return result{Err: c.err}
+	return val
+}
+func (c *bgCheck) log() []logr.Rec {
+	return c.logg.SlicePrev()
 }

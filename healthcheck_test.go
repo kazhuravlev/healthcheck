@@ -12,6 +12,8 @@ import (
 	hc "github.com/kazhuravlev/healthcheck"
 )
 
+var timeNow = time.Date(1, 2, 3, 4, 5, 6, 7, time.UTC)
+
 func requireNoError(t *testing.T, err error) {
 	t.Helper()
 	if err == nil {
@@ -22,26 +24,39 @@ func requireNoError(t *testing.T, err error) {
 	t.FailNow()
 }
 
-func requireTrue(t *testing.T, val bool, msg string) {
+func requireTrue(t *testing.T, val bool, msg string, args ...any) {
 	t.Helper()
 	if val {
 		return
 	}
 
-	t.Error(msg)
+	t.Error(fmt.Sprintf(msg, args...))
 	t.FailNow()
+}
+
+func requireStateEqual(t *testing.T, exp, actual hc.CheckState) {
+	t.Helper()
+
+	//requireTrue(t, exp.ActualAt.Equal(actual.ActualAt), "unexpected check actual_at")
+	requireTrue(t, exp.Status == actual.Status, "unexpected check status: exp %s, actual %s", exp.Status, actual.Status)
+	requireTrue(t, exp.Error == actual.Error, "unexpected check error")
 }
 
 func requireReportEqual(t *testing.T, expected, actual hc.Report) {
 	t.Helper()
 
-	requireTrue(t, expected.Status == actual.Status, "unexpected status")
+	requireTrue(t, expected.Status == actual.Status, "unexpected status: exp %s, actual %s", expected.Status, actual.Status)
 	requireTrue(t, len(expected.Checks) == len(actual.Checks), "unexpected checks count")
 
 	for i := range expected.Checks {
 		requireTrue(t, expected.Checks[i].Name == actual.Checks[i].Name, "unexpected check name")
-		requireTrue(t, expected.Checks[i].Status == actual.Checks[i].Status, "unexpected check status")
-		requireTrue(t, expected.Checks[i].Error == actual.Checks[i].Error, "unexpected check error")
+		requireStateEqual(t, expected.Checks[i].State, actual.Checks[i].State)
+		expLen := len(expected.Checks[i].Previous)
+		actLen := len(actual.Checks[i].Previous)
+		requireTrue(t, expLen == actLen, "unexpected previous count error. Exp (%d) Act (%d)", expLen, actLen)
+		for ii := range expected.Checks[i].Previous {
+			requireStateEqual(t, expected.Checks[i].Previous[ii], actual.Checks[i].Previous[ii])
+		}
 	}
 }
 
@@ -62,6 +77,139 @@ func hcWithChecks(t *testing.T, checks ...hc.ICheck) *hc.Healthcheck {
 	return hcInst
 }
 
+func TestManualCheck(t *testing.T) {
+	t.Parallel()
+
+	manualCheck := hc.NewManual("some_system")
+	hcInst := hcWithChecks(t, manualCheck)
+
+	t.Run("failed_by_default", func(t *testing.T) {
+		res := hcInst.RunAllChecks(context.Background())
+		requireReportEqual(t, hc.Report{
+			Status: hc.StatusDown,
+			Checks: []hc.Check{
+				{Name: "some_system", State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusDown, Error: "initial"}},
+			},
+		}, res)
+	})
+
+	t.Run("can_be_marked_as_ok", func(t *testing.T) {
+		manualCheck.SetErr(nil)
+
+		res := hcInst.RunAllChecks(context.Background())
+		requireReportEqual(t, hc.Report{
+			Status: hc.StatusUp,
+			Checks: []hc.Check{
+				{
+					Name:  "some_system",
+					State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusUp, Error: ""},
+					Previous: []hc.CheckState{
+						{ActualAt: timeNow, Status: hc.StatusDown, Error: "initial"}, // from prev test
+					},
+				},
+			},
+		}, res)
+	})
+
+	t.Run("can_be_marked_as_failed", func(t *testing.T) {
+		manualCheck.SetErr(fmt.Errorf("the sky was falling: %w", io.EOF))
+
+		res := hcInst.RunAllChecks(context.Background())
+		requireReportEqual(t, hc.Report{
+			Status: hc.StatusDown,
+			Checks: []hc.Check{
+				{
+					Name:  "some_system",
+					State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusDown, Error: "the sky was falling: EOF"},
+					Previous: []hc.CheckState{
+						{ActualAt: timeNow, Status: hc.StatusUp, Error: ""},          // from prev test
+						{ActualAt: timeNow, Status: hc.StatusDown, Error: "initial"}, // from prev test
+					},
+				},
+			},
+		}, res)
+	})
+}
+
+func TestBackgroundCheck(t *testing.T) {
+	t.Parallel()
+
+	errNotReady := errors.New("not ready")
+
+	curErrorMu := new(sync.Mutex)
+	var curError error
+
+	delay := 200 * time.Millisecond
+	bgCheck := hc.NewBackground(
+		"some_system",
+		errNotReady,
+		delay,
+		delay,
+		10*time.Second,
+		func(ctx context.Context) error {
+			curErrorMu.Lock()
+			defer curErrorMu.Unlock()
+
+			return curError
+		},
+	)
+	hcInst := hcWithChecks(t, bgCheck)
+
+	t.Run("initial_error_is_used", func(t *testing.T) {
+		res := hcInst.RunAllChecks(context.Background())
+		requireReportEqual(t, hc.Report{
+			Status: hc.StatusDown,
+			Checks: []hc.Check{
+				{Name: "some_system", State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusDown, Error: "not ready"}},
+			},
+		}, res)
+	})
+
+	// wait for bg check next run
+	time.Sleep(delay)
+
+	t.Run("check_current_error_nil", func(t *testing.T) {
+		res := hcInst.RunAllChecks(context.Background())
+		requireReportEqual(t, hc.Report{
+			Status: hc.StatusUp,
+			Checks: []hc.Check{
+				{
+					Name:  "some_system",
+					State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusUp, Error: ""},
+					Previous: []hc.CheckState{
+						{ActualAt: timeNow, Status: hc.StatusDown, Error: "not ready"}, // from prev test
+					},
+				},
+			},
+		}, res)
+	})
+
+	// set error
+	curErrorMu.Lock()
+	curError = io.EOF
+	curErrorMu.Unlock()
+	// wait for bg check next run
+	time.Sleep(delay)
+
+	t.Run("change_status_after_each_run", func(t *testing.T) {
+		res := hcInst.RunAllChecks(context.Background())
+		requireReportEqual(t, hc.Report{
+			Status: hc.StatusDown,
+			Checks: []hc.Check{
+				{
+					Name:  "some_system",
+					State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusDown, Error: "EOF"},
+					Previous: []hc.CheckState{
+						{ActualAt: timeNow, Status: hc.StatusUp, Error: ""},            // from prev test
+						{ActualAt: timeNow, Status: hc.StatusDown, Error: "not ready"}, // from prev test
+					},
+				},
+			},
+		}, res)
+	})
+
+}
+
 func TestService(t *testing.T) { //nolint:funlen
 	t.Run("empty_healthcheck_have_status_up", func(t *testing.T) {
 		t.Parallel()
@@ -69,7 +217,7 @@ func TestService(t *testing.T) { //nolint:funlen
 		res := hcWithChecks(t).RunAllChecks(context.Background())
 		requireReportEqual(t, hc.Report{
 			Status: hc.StatusUp,
-			Checks: []hc.CheckStatus{},
+			Checks: []hc.Check{},
 		}, res)
 	})
 
@@ -82,8 +230,8 @@ func TestService(t *testing.T) { //nolint:funlen
 		res := hcWithChecks(t, simpleCheck("always_ok", nil)).RunAllChecks(ctx)
 		requireReportEqual(t, hc.Report{
 			Status: hc.StatusDown,
-			Checks: []hc.CheckStatus{
-				{Name: "always_ok", Status: hc.StatusDown, Error: "context canceled"},
+			Checks: []hc.Check{
+				{Name: "always_ok", State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusDown, Error: "context canceled"}},
 			},
 		}, res)
 	})
@@ -98,10 +246,10 @@ func TestService(t *testing.T) { //nolint:funlen
 		).RunAllChecks(context.Background())
 		requireReportEqual(t, hc.Report{
 			Status: hc.StatusUp,
-			Checks: []hc.CheckStatus{
-				{Name: "check1", Status: hc.StatusUp, Error: ""},
-				{Name: "check2", Status: hc.StatusUp, Error: ""},
-				{Name: "check_3", Status: hc.StatusUp, Error: ""},
+			Checks: []hc.Check{
+				{Name: "check1", State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusUp, Error: ""}},
+				{Name: "check2", State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusUp, Error: ""}},
+				{Name: "check_3", State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusUp, Error: ""}},
 			},
 		}, res)
 	})
@@ -117,11 +265,11 @@ func TestService(t *testing.T) { //nolint:funlen
 		).RunAllChecks(context.Background())
 		requireReportEqual(t, hc.Report{
 			Status: hc.StatusUp,
-			Checks: []hc.CheckStatus{
-				{Name: "check1", Status: hc.StatusUp, Error: ""},
-				{Name: "check1_x", Status: hc.StatusUp, Error: ""},
-				{Name: "check1_x_x", Status: hc.StatusUp, Error: ""},
-				{Name: "check1_x_x_x", Status: hc.StatusUp, Error: ""},
+			Checks: []hc.Check{
+				{Name: "check1", State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusUp, Error: ""}},
+				{Name: "check1_x", State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusUp, Error: ""}},
+				{Name: "check1_x_x", State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusUp, Error: ""}},
+				{Name: "check1_x_x_x", State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusUp, Error: ""}},
 			},
 		}, res)
 	})
@@ -145,118 +293,45 @@ func TestService(t *testing.T) { //nolint:funlen
 		res := hcInst.RunAllChecks(context.Background())
 		requireReportEqual(t, hc.Report{
 			Status: hc.StatusDown,
-			Checks: []hc.CheckStatus{
-				{Name: "always_ok", Status: hc.StatusUp, Error: ""},
-				{Name: "always_ok_x", Status: hc.StatusUp, Error: ""},
-				{Name: "context_timeout", Status: hc.StatusDown, Error: "context deadline exceeded"},
+			Checks: []hc.Check{
+				{Name: "always_ok", State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusUp, Error: ""}},
+				{Name: "always_ok_x", State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusUp, Error: ""}},
+				{Name: "context_timeout", State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusDown, Error: "context deadline exceeded"}},
 			},
 		}, res)
 	})
+}
 
-	t.Run("manual_check", func(t *testing.T) {
-		t.Parallel()
+func TestPrevious(t *testing.T) { //nolint:funlen
+	t.Parallel()
 
-		manualCheck := hc.NewManual("some_system")
-		hcInst := hcWithChecks(t, manualCheck)
+	manualCheck := hc.NewManual("x")
+	hcInst := hcWithChecks(t, manualCheck)
 
-		t.Run("failed_by_default", func(t *testing.T) {
-			res := hcInst.RunAllChecks(context.Background())
-			requireReportEqual(t, hc.Report{
-				Status: hc.StatusDown,
-				Checks: []hc.CheckStatus{
-					{Name: "some_system", Status: hc.StatusDown, Error: "initial status"},
-				},
-			}, res)
-		})
+	t.Run("run_all_checks_ignore_manual_checks", func(t *testing.T) {
+		hcInst.RunAllChecks(context.Background())
+		hcInst.RunAllChecks(context.Background())
+		hcInst.RunAllChecks(context.Background())
+		report := hcInst.RunAllChecks(context.Background())
 
-		t.Run("can_be_marked_as_ok", func(t *testing.T) {
-			manualCheck.SetErr(nil)
-
-			res := hcInst.RunAllChecks(context.Background())
-			requireReportEqual(t, hc.Report{
-				Status: hc.StatusUp,
-				Checks: []hc.CheckStatus{
-					{Name: "some_system", Status: hc.StatusUp, Error: ""},
-				},
-			}, res)
-		})
-
-		t.Run("can_be_marked_as_failed", func(t *testing.T) {
-			manualCheck.SetErr(fmt.Errorf("the sky was falling: %w", io.EOF))
-
-			res := hcInst.RunAllChecks(context.Background())
-			requireReportEqual(t, hc.Report{
-				Status: hc.StatusDown,
-				Checks: []hc.CheckStatus{
-					{Name: "some_system", Status: hc.StatusDown, Error: "the sky was falling: EOF"},
-				},
-			}, res)
-		})
+		requireTrue(t, len(report.Checks[0].Previous) == 0, "RunAllChecks should not affect log of states for manual check")
 	})
 
-	t.Run("background_check", func(t *testing.T) {
-		t.Parallel()
+	t.Run("previous_will_filled_on_each_manual_change", func(t *testing.T) {
+		manualCheck.SetErr(nil)
+		manualCheck.SetErr(io.EOF)
+		manualCheck.SetErr(io.ErrUnexpectedEOF)
 
-		errNotReady := errors.New("not ready")
+		report := hcInst.RunAllChecks(context.Background())
 
-		curErrorMu := new(sync.Mutex)
-		var curError error
+		check := report.Checks[0]
+		requireStateEqual(t, hc.CheckState{ActualAt: timeNow, Status: hc.StatusDown, Error: "unexpected EOF"}, check.State)
 
-		delay := 200 * time.Millisecond
-		bgCheck := hc.NewBackground(
-			"some_system",
-			errNotReady,
-			delay,
-			delay,
-			10*time.Second,
-			func(ctx context.Context) error {
-				curErrorMu.Lock()
-				defer curErrorMu.Unlock()
-
-				return curError
-			},
-		)
-		hcInst := hcWithChecks(t, bgCheck)
-
-		t.Run("initial_error_is_used", func(t *testing.T) {
-			res := hcInst.RunAllChecks(context.Background())
-			requireReportEqual(t, hc.Report{
-				Status: hc.StatusDown,
-				Checks: []hc.CheckStatus{
-					{Name: "some_system", Status: hc.StatusDown, Error: "not ready"},
-				},
-			}, res)
-		})
-
-		// wait for bg check next run
-		time.Sleep(delay)
-
-		t.Run("check_current_error_nil", func(t *testing.T) {
-			res := hcInst.RunAllChecks(context.Background())
-			requireReportEqual(t, hc.Report{
-				Status: hc.StatusUp,
-				Checks: []hc.CheckStatus{
-					{Name: "some_system", Status: hc.StatusUp, Error: ""},
-				},
-			}, res)
-		})
-
-		// set error
-		curErrorMu.Lock()
-		curError = io.EOF
-		curErrorMu.Unlock()
-		// wait for bg check next run
-		time.Sleep(delay)
-
-		t.Run("change_status_after_each_run", func(t *testing.T) {
-			res := hcInst.RunAllChecks(context.Background())
-			requireReportEqual(t, hc.Report{
-				Status: hc.StatusDown,
-				Checks: []hc.CheckStatus{
-					{Name: "some_system", Status: hc.StatusDown, Error: "EOF"},
-				},
-			}, res)
-		})
+		prev := check.Previous
+		requireTrue(t, len(prev) == 3, "no error, eof, unexpected eof")
+		requireStateEqual(t, hc.CheckState{ActualAt: timeNow, Status: hc.StatusDown, Error: "EOF"}, prev[0])
+		requireStateEqual(t, hc.CheckState{ActualAt: timeNow, Status: hc.StatusUp, Error: ""}, prev[1])
+		requireStateEqual(t, hc.CheckState{ActualAt: timeNow, Status: hc.StatusDown, Error: "initial"}, prev[2])
 	})
 }
 

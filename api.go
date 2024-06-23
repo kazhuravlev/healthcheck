@@ -4,14 +4,12 @@ import (
 	"context"
 	"log/slog"
 	"sync"
-
-	"github.com/kazhuravlev/just"
 )
 
 // Register will register a check.
 //
 // All checks should have a name. Will be better that name will contain only lowercase symbols and lodash.
-// This is allowing to have the same name for CheckStatus and for metrics.
+// This is allowing to have the same name for Check and for metrics.
 func (s *Healthcheck) Register(ctx context.Context, check ICheck) {
 	s.checksMu.Lock()
 	defer s.checksMu.Unlock()
@@ -41,10 +39,9 @@ CheckID:
 		check.run()
 	}
 
-	s.checks = append(s.checks, checkRec{
-		ID:      checkID,
-		CheckFn: check.check,
-		Timeout: check.timeout(),
+	s.checks = append(s.checks, checkContainer{
+		ID:    checkID,
+		Check: check,
 	})
 }
 
@@ -53,27 +50,30 @@ func (s *Healthcheck) RunAllChecks(ctx context.Context) Report {
 	s.checksMu.RLock()
 	defer s.checksMu.RUnlock()
 
-	checks := make([]CheckStatus, len(s.checks))
+	checks := make([]Check, len(s.checks))
 	{
 		wg := new(sync.WaitGroup)
 		wg.Add(len(s.checks))
 
+		// TODO(zhuravlev): do not run goroutines for checks like manual and bg check.
 		for i := range s.checks {
-			go func(i int, check checkRec) {
+			go func(i int, check checkContainer) {
 				defer wg.Done()
 
-				checks[i] = runCheck(ctx, s.opts, check)
+				checks[i] = s.runCheck(ctx, check)
 			}(i, s.checks[i])
 		}
 
 		wg.Wait()
 	}
 
-	failedChecks := just.SliceFilter(checks, func(s CheckStatus) bool {
-		return s.Status == StatusDown
-	})
-
-	status := just.If(len(failedChecks) == 0, StatusUp, StatusDown)
+	status := StatusUp
+	for _, check := range checks {
+		if check.State.Status == StatusDown {
+			status = StatusDown
+			break
+		}
+	}
 
 	return Report{
 		Status: status,
