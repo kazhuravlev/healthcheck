@@ -1,14 +1,10 @@
 package healthcheck
 
 import (
-	"container/ring"
 	"context"
-	"github.com/kazhuravlev/just"
 	"log/slog"
 	"sync"
 )
-
-const maxStatesToStore = 5
 
 // Register will register a check.
 //
@@ -38,17 +34,14 @@ CheckID:
 		}
 	}
 
-	s.checkStates[checkID] = ring.New(maxStatesToStore)
-
 	switch check := check.(type) {
 	case *bgCheck:
 		check.run()
 	}
 
-	s.checks = append(s.checks, checkRec{
-		ID:      checkID,
-		CheckFn: check.check,
-		Timeout: check.timeout(),
+	s.checks = append(s.checks, checkContainer{
+		ID:    checkID,
+		Check: check,
 	})
 }
 
@@ -62,8 +55,9 @@ func (s *Healthcheck) RunAllChecks(ctx context.Context) Report {
 		wg := new(sync.WaitGroup)
 		wg.Add(len(s.checks))
 
+		// TODO(zhuravlev): do not run goroutines for checks like manual and bg check.
 		for i := range s.checks {
-			go func(i int, check checkRec) {
+			go func(i int, check checkContainer) {
 				defer wg.Done()
 
 				checks[i] = s.runCheck(ctx, check)
@@ -73,11 +67,13 @@ func (s *Healthcheck) RunAllChecks(ctx context.Context) Report {
 		wg.Wait()
 	}
 
-	failedChecks := just.SliceFilter(checks, func(s Check) bool {
-		return s.State.Status == StatusDown
-	})
-
-	status := just.If(len(failedChecks) == 0, StatusUp, StatusDown)
+	status := StatusUp
+	for _, check := range checks {
+		if check.State.Status == StatusDown {
+			status = StatusDown
+			break
+		}
+	}
 
 	return Report{
 		Status: status,
