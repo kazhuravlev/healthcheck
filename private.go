@@ -2,63 +2,69 @@ package healthcheck
 
 import (
 	"context"
+	"github.com/kazhuravlev/healthcheck/internal/logr"
+	"github.com/kazhuravlev/just"
 	"strings"
+	"time"
 )
 
-func (s *Healthcheck) runCheck(ctx context.Context, check checkRec) Check {
-	ctx, cancel := context.WithTimeout(ctx, check.Timeout)
+func (s *Healthcheck) runCheck(ctx context.Context, check checkContainer) Check {
+	ctx, cancel := context.WithTimeout(ctx, check.Check.timeout())
 	defer cancel()
 
-	resCh := make(chan result, 1)
+	resCh := make(chan logr.Rec, 1)
 	go func() {
 		defer close(resCh)
-		resCh <- check.CheckFn(ctx)
+		resCh <- check.Check.check(ctx)
 	}()
 
-	checkStatus := StatusUp
-	var checkErr string
+	rec := logr.Rec{
+		Time:  time.Now(),
+		Error: nil,
+	}
 
 	select {
 	case <-ctx.Done():
-		checkErr = ctx.Err().Error()
-		checkStatus = StatusDown
-	case res := <-resCh:
-		if res.Err != nil {
-			checkErr = res.Err.Error()
-			checkStatus = StatusDown
+		rec = logr.Rec{
+			Time:  time.Now(),
+			Error: ctx.Err(),
 		}
+	case rec = <-resCh:
 	}
 
-	s.opts.setCheckStatus(check.ID, checkStatus)
-
-	curState := CheckState{
-		ActualAt: s.opts.time.Now(),
-		Status:   checkStatus,
-		Error:    checkErr,
+	status := StatusUp
+	errText := ""
+	if rec.Error != nil {
+		status = StatusDown
+		errText = rec.Error.Error()
 	}
 
-	prev := make([]CheckState, 0, maxStatesToStore)
-	{
-		s.checksMu.RLock()
-		p := s.checkStates[check.ID]
-		p.Do(func(checkState any) {
-			if checkState == nil {
-				return
-			}
+	// TODO(zhuravlev): run on manual and bg checks.
+	s.opts.setCheckStatus(check.ID, status)
 
-			prev = append(prev, checkState.(CheckState))
-		})
+	prev := just.SliceMap(check.Check.log(), func(rec logr.Rec) CheckState {
+		status := StatusUp
+		errText := ""
 
-		p = p.Prev()
-		p.Value = curState
+		if rec.Error != nil {
+			errText = rec.Error.Error()
+			status = StatusDown
+		}
 
-		s.checkStates[check.ID] = p
-		s.checksMu.RUnlock()
-	}
+		return CheckState{
+			ActualAt: rec.Time,
+			Status:   status,
+			Error:    errText,
+		}
+	})
 
 	return Check{
-		Name:     check.ID,
-		State:    curState,
+		Name: check.ID,
+		State: CheckState{
+			ActualAt: rec.Time,
+			Status:   status,
+			Error:    errText,
+		},
 		Previous: prev,
 	}
 }

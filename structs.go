@@ -2,6 +2,7 @@ package healthcheck
 
 import (
 	"context"
+	"github.com/kazhuravlev/healthcheck/internal/logr"
 	"time"
 )
 
@@ -33,16 +34,12 @@ type CheckFn func(ctx context.Context) error
 
 type ICheck interface {
 	id() string
-	check(ctx context.Context) result
+	check(ctx context.Context) logr.Rec
 	timeout() time.Duration
+	log() []logr.Rec
 }
 
-type result struct {
-	Err error
-}
-
-type checkRec struct {
-	ID      string
-	CheckFn func(ctx context.Context) result
-	Timeout time.Duration
+type checkContainer struct {
+	ID    string
+	Check ICheck
 }
