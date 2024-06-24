@@ -12,24 +12,26 @@ func (s *Healthcheck) runCheck(ctx context.Context, check checkContainer) Check 
 	ctx, cancel := context.WithTimeout(ctx, check.Check.timeout())
 	defer cancel()
 
-	resCh := make(chan logr.Rec, 1)
-	go func() {
-		defer close(resCh)
-		resCh <- check.Check.check(ctx)
-	}()
-
 	rec := logr.Rec{
 		Time:  time.Now(),
 		Error: nil,
 	}
 
-	select {
-	case <-ctx.Done():
-		rec = logr.Rec{
-			Time:  time.Now(),
-			Error: ctx.Err(),
+	{
+		resCh := make(chan logr.Rec, 1)
+		go func() {
+			defer close(resCh)
+			resCh <- check.Check.check(ctx)
+		}()
+
+		select {
+		case <-ctx.Done():
+			rec = logr.Rec{
+				Time:  time.Now(),
+				Error: ctx.Err(),
+			}
+		case rec = <-resCh:
 		}
-	case rec = <-resCh:
 	}
 
 	status := StatusUp
