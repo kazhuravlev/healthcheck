@@ -33,7 +33,7 @@ func (s *Server) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/live", s.handleLive)
-	mux.HandleFunc("/ready", s.handleReady)
+	mux.HandleFunc("/ready", ReadyHandler(s.opts.healthcheck))
 	mux.Handle("/metrics", promhttp.Handler())
 
 	httpServer := &http.Server{
@@ -66,33 +66,32 @@ func (s *Server) handleLive(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *Server) handleReady(w http.ResponseWriter, req *http.Request) {
-	const unknownResp = `{"status":"unknown","checks":[]}`
+// ReadyHandler build a http.HandlerFunc from healthcheck.
+func ReadyHandler(healthcheck IHealthcheck) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		const unknownResp = `{"status":"unknown","checks":[]}`
 
-	ctx := req.Context()
-	w.Header().Set("Content-Type", "application/json")
+		ctx := req.Context()
+		w.Header().Set("Content-Type", "application/json")
 
-	report := s.opts.healthcheck.RunAllChecks(ctx)
-	reportJson, err := json.Marshal(report)
-	if err != nil {
-		s.opts.logger.ErrorContext(ctx, "marshal report", slog.String("error", err.Error()))
+		report := healthcheck.RunAllChecks(ctx)
+		reportJson, err := json.Marshal(report)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(unknownResp))
+			return
+		}
 
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(unknownResp))
-		return
-	}
-
-	switch report.Status {
-	default:
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(unknownResp))
-	case StatusUp:
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(reportJson)
-	case StatusDown:
-		s.opts.logger.ErrorContext(ctx, "status error", slog.Any("report", report))
-
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write(reportJson)
+		switch report.Status {
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(unknownResp))
+		case StatusUp:
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(reportJson)
+		case StatusDown:
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write(reportJson)
+		}
 	}
 }
