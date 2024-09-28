@@ -20,7 +20,7 @@ feature [Liveness and Readiness](https://kubernetes.io/docs/tasks/configure-pod-
 ## Quickstart
 
 ```shell
-go get -u github.com/kazhuravlev/healthckeck
+go get -u github.com/kazhuravlev/healthcheck
 ```
 
 Check an [examples](./examples/example.go).
