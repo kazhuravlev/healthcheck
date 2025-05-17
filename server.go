@@ -32,7 +32,7 @@ func NewServer(hc IHealthcheck, opts ...func(*serverOptions)) (*Server, error) {
 func (s *Server) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/live", s.handleLive)
+	mux.HandleFunc("/live", LiveHandler())
 	mux.HandleFunc("/ready", ReadyHandler(s.opts.healthcheck))
 	mux.Handle("/metrics", promhttp.Handler())
 
@@ -61,9 +61,12 @@ func (s *Server) Run(ctx context.Context) error {
 	return nil
 }
 
-func (s *Server) handleLive(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+// LiveHandler return an implementation of /live request.
+func LiveHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+	}
 }
 
 // ReadyHandler build a http.HandlerFunc from healthcheck.
