@@ -57,6 +57,18 @@ func TestReadyHandler(t *testing.T) {
 	f("i_do_not_know", http.StatusInternalServerError, `{"status":"unknown","checks":[]}`)
 }
 
+func TestLiveHandler(t *testing.T) {
+	handler := healthcheck.LiveHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/live", nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	res := w.Result()
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	require.NoError(t, res.Body.Close())
+}
+
 func TestServer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	hc := NewMockIHealthcheck(ctrl)
