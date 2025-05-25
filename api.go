@@ -36,7 +36,7 @@ CheckID:
 
 	switch check := check.(type) {
 	case *bgCheck:
-		check.run()
+		check.run(ctx)
 	}
 
 	s.checks = append(s.checks, checkContainer{
