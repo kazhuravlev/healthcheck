@@ -76,5 +76,22 @@ func main() {
 	// 4. Check health at http://localhost:8080/ready
 	select {}
 }
+## Types of Health Checks
+
+### 1. Basic Checks (Synchronous)
+
+Basic checks run on-demand when the `/ready` endpoint is called. Use these for:
+
+- Fast operations (< 1 second)
+- Checks that need fresh data
+- Low-cost operations
+
+```go
+// Database connectivity check
+dbCheck := healthcheck.NewBasic("postgres", time.Second, func (ctx context.Context) error {
+  return db.PingContext(ctx)
+})
+```
+
 
 ```
