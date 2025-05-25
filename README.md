@@ -143,5 +143,38 @@ cacheCheck.SetErr(errors.New("cache warming in progress"))
 cacheCheck.SetErr(nil)
 ```
 
+## Best Practices
+
+### 1. Choose the Right Check Type
+
+| Scenario            | Check Type | Why                          |
+|---------------------|------------|------------------------------|
+| Database ping       | Basic      | Fast, needs fresh data       |
+| File system check   | Basic      | Fast, local operation        |
+| External API health | Background | Expensive, rate-limited      |
+| Message queue depth | Background | Metrics query, can be stale  |
+| Cache warmup status | Manual     | Application-controlled state |
+
+### 2. Set Appropriate Timeouts
+
+```go
+// ❌ Bad: Too long timeout blocks readiness. Timeout should less than timeout in k8s
+healthcheck.NewBasic("db", 30*time.Second, checkFunc)
+
+// ✅ Good: Short timeout 
+healthcheck.NewBasic("db", 1*time.Second, checkFunc)
+```
+
+### 3. Use Status Codes Correctly
+
+- **Liveness** (`/live`): Should almost always return 200 OK
+    - Only fail if the application is in an unrecoverable state
+    - Kubernetes will restart the pod on failure
+
+- **Readiness** (`/ready`): Should fail when:
+    - Critical dependencies are unavailable
+    - Application is still initializing
+    - Application is shutting down
+
 
 ```
