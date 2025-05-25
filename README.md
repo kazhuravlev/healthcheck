@@ -176,5 +176,29 @@ healthcheck.NewBasic("db", 1*time.Second, checkFunc)
     - Application is still initializing
     - Application is shutting down
 
+### 4. Add Context to Errors
+
+```go
+func checkDatabase(ctx context.Context) error {
+  if err := db.PingContext(ctx); err != nil {
+    // Use fmt.Errorf to add context. It will be available in /ready report
+	return fmt.Errorf("postgres connection failed: %w", err)
+  }
+  
+  return nil
+}
+```
+
+### 5. Monitor Checks
+
+```go
+hc, _ := healthcheck.New(
+  healthcheck.WithCheckStatusHook(func (name string, status healthcheck.Status) {
+    // hcMetric can be a prometheus metric - it is up to your infrastructure
+	hcMetric.WithLabelValues(name, string(status)).Set(1)
+  }),
+)
+```
+
 
 ```
