@@ -93,5 +93,35 @@ dbCheck := healthcheck.NewBasic("postgres", time.Second, func (ctx context.Conte
 })
 ```
 
+### 2. Background Checks (Asynchronous)
+
+Background checks run periodically in a separate goroutine (in background mode). Use these for:
+
+- Expensive operations (API calls, complex queries)
+- Checks with rate limits (when checks running rarely than k8s requests to `/ready`)
+- Operations that can use slightly stale data
+
+```go
+// External API health check - runs every 30 seconds
+apiCheck := healthcheck.NewBackground(
+  "payment-api",
+  nil, // initial error state
+  5*time.Second, // initial delay
+  30*time.Second, // check interval
+  5*time.Second,  // timeout per check
+  func (ctx context.Context) error {
+    resp, err := client.Get("https://api.payment.com/health")
+    if err != nil {
+      return err
+    }
+    defer resp.Body.Close()
+    if resp.StatusCode != 200 {
+      return errors.New("unhealthy")
+    }
+    return nil
+  },
+)
+```
+
 
 ```
