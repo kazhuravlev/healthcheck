@@ -356,3 +356,39 @@ func TestServiceMetrics(t *testing.T) { //nolint:paralleltest
 	requireTrue(t, res["check_without_error"] == hc.StatusUp, "response without error must have status UP")
 	requireTrue(t, res["check_with_error"] == hc.StatusDown, "response without error must have status UP")
 }
+
+func TestBackgroundCheckStop(t *testing.T) {
+	var mu sync.Mutex
+	callCount := 0
+	check := hc.NewBackground("test_bg", nil, 0, 100*time.Millisecond, time.Second, func(ctx context.Context) error {
+		mu.Lock()
+		callCount++
+		mu.Unlock()
+		return nil
+	})
+
+	hcInst, err := hc.New()
+	requireTrue(t, err == nil, "new should not produce error")
+	hcInst.Register(context.Background(), check)
+
+	// Wait for a run
+	time.Sleep(350 * time.Millisecond)
+
+	// Stop all background checks
+	hcInst.Stop()
+
+	mu.Lock()
+	initialCount := callCount
+	mu.Unlock()
+
+	// Wait a bit more
+	time.Sleep(200 * time.Millisecond)
+
+	// Ensure no more calls were made after Stop
+	mu.Lock()
+	finalCount := callCount
+	mu.Unlock()
+
+	requireTrue(t, initialCount == finalCount, "background check should not run after Stop()")
+	requireTrue(t, finalCount >= 3, "expected at least 3 calls before stop")
+}
