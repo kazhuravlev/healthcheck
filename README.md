@@ -7,8 +7,23 @@
 [![CodeCov](https://codecov.io/gh/kazhuravlev/healthcheck/branch/master/graph/badge.svg?token=tNKcOjlxLo)](https://codecov.io/gh/kazhuravlev/healthcheck)
 [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go#utilities)
 
-This tool allows you to unlock the kubernetes
-feature [Liveness and Readiness](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/).
+A production-ready health check library for Go applications that enables proper monitoring and graceful degradation in
+modern cloud environments,
+especially [Kubernetes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/).
+
+## Why Health Checks Matter
+
+Health checks are critical for building resilient, self-healing applications in distributed systems. They provide:
+
+1. **Automatic Recovery**: In Kubernetes, failed health checks trigger automatic pod restarts, ensuring your application
+   recovers from transient failures without manual intervention.
+2. **Load Balancer Integration**: Health checks prevent traffic from being routed to unhealthy instances, maintaining
+   service quality even during partial outages.
+3. **Graceful Degradation**: By monitoring dependencies (databases, caches, external APIs), your application can degrade
+   gracefully when non-critical services fail.
+4. **Operational Visibility**: Health endpoints provide instant insight into system state, making debugging and incident
+   response faster.
+5. **Zero-Downtime Deployments**: Readiness checks ensure new deployments only receive traffic when fully initialized.
 
 ## Features
 
