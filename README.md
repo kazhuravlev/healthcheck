@@ -58,23 +58,22 @@ import (
 func main() {
 	ctx := context.TODO()
 
-	// 1. Init healthcheck instance. It will store all our checks.
+	// 1. Create healthcheck instance
 	hc, _ := healthcheck.New()
 
-	// 2. Register checks that will random respond with an error.
+	// 2. Register a simple check
 	hc.Register(ctx, healthcheck.NewBasic("redis", time.Second, func(ctx context.Context) error {
 		if rand.Float64() > 0.5 {
 			return errors.New("service is not available")
 		}
-
 		return nil
 	}))
 
-	// 3. Init and run a webserver for integration with Kubernetes.
-	sysServer, _ := healthcheck.NewServer(hc, healthcheck.WithPort(8080))
-	_ = sysServer.Run(ctx)
+	// 3. Start HTTP server
+	server, _ := healthcheck.NewServer(hc, healthcheck.WithPort(8080))
+	_ = server.Run(ctx)
 
-	// 4. Open http://localhost:8080/ready to check the status of your system
+	// 4. Check health at http://localhost:8080/ready
 	select {}
 }
 
