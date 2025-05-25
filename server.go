@@ -53,7 +53,7 @@ func (s *Server) Run(ctx context.Context) error {
 	}()
 
 	go func() {
-		if err := httpServer.ListenAndServe(); err != nil {
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			s.opts.logger.ErrorContext(ctx, "run status server", slog.String("error", err.Error()))
 		}
 	}()
