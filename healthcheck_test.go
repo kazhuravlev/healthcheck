@@ -369,13 +369,13 @@ func TestBackgroundCheckStop(t *testing.T) {
 
 	hcInst, err := hc.New()
 	requireTrue(t, err == nil, "new should not produce error")
-	hcInst.Register(context.Background(), check)
+	ctx, cancel := context.WithCancel(context.Background())
+	hcInst.Register(ctx, check)
 
 	// Wait for a run
 	time.Sleep(350 * time.Millisecond)
 
-	// Stop all background checks
-	hcInst.Stop()
+	cancel()
 
 	mu.Lock()
 	initialCount := callCount
