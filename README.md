@@ -35,7 +35,7 @@ Health checks are critical for building resilient, self-healing applications in 
 - **Graceful Shutdown**: Proper cleanup of background checks
 - **Check History**: Last 5 states stored for each check for debugging
 
-## Quickstart
+## Installation
 
 ```shell
 go get -u github.com/kazhuravlev/healthcheck
