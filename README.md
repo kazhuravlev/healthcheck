@@ -123,5 +123,25 @@ apiCheck := healthcheck.NewBackground(
 )
 ```
 
+### 3. Manual Checks
+
+Manual checks are controlled by your application logic. Use these for:
+
+- Initialization states (cache warming, data loading)
+- Circuit breaker patterns
+- Feature flags
+
+```go
+// Cache warming check
+cacheCheck := healthcheck.NewManual("cache-warmed")
+hc.Register(ctx, cacheCheck)
+
+// Set unhealthy during startup
+cacheCheck.SetErr(errors.New("cache warming in progress"))
+
+// After cache is warmed
+cacheCheck.SetErr(nil)
+```
+
 
 ```
