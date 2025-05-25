@@ -41,7 +41,7 @@ Health checks are critical for building resilient, self-healing applications in 
 go get -u github.com/kazhuravlev/healthcheck
 ```
 
-Check an [examples](./examples/example.go).
+## Quick Start
 
 ```go
 package main
@@ -76,6 +76,8 @@ func main() {
 	// 4. Check health at http://localhost:8080/ready
 	select {}
 }
+```
+
 ## Types of Health Checks
 
 ### 1. Basic Checks (Synchronous)
@@ -200,5 +202,129 @@ hc, _ := healthcheck.New(
 )
 ```
 
+## Complete Example
 
+```go
+package main
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"log"
+	"time"
+
+	"github.com/kazhuravlev/healthcheck"
+	_ "github.com/lib/pq"
+)
+
+func main() {
+	ctx := context.Background()
+
+	// Initialize dependencies
+	db, err := sql.Open("postgres", "postgres://localhost/myapp")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Create healthcheck
+	hc, _ := healthcheck.New()
+
+	// 1. Database check - synchronous, critical
+	hc.Register(ctx, healthcheck.NewBasic("postgres", time.Second, func(ctx context.Context) error {
+		return db.PingContext(ctx)
+	}))
+
+	// 2. Cache warmup - manual control
+	cacheReady := healthcheck.NewManual("cache")
+	hc.Register(ctx, cacheReady)
+	cacheReady.SetErr(fmt.Errorf("warming up"))
+
+	// 3. External API - background check
+	hc.Register(ctx, healthcheck.NewBackground(
+		"payment-provider",
+		nil,
+		10*time.Second, // initial delay
+		30*time.Second, // check interval  
+		5*time.Second,  // timeout
+		checkPaymentProvider,
+	))
+
+	// Start health check server
+	server, _ := healthcheck.NewServer(hc, healthcheck.WithPort(8080))
+	if err := server.Run(ctx); err != nil {
+		log.Fatal(err)
+	}
+
+	// Simulate cache warmup completion
+	go func() {
+		time.Sleep(5 * time.Second)
+		cacheReady.SetErr(nil)
+		log.Println("Cache warmed up")
+	}()
+
+	log.Println("Health checks available at:")
+	log.Println("  - http://localhost:8080/live")
+	log.Println("  - http://localhost:8080/ready")
+
+	select {}
+}
+
+func checkPaymentProvider(ctx context.Context) error {
+	// Implementation of payment provider check
+	return nil
+}
+```
+
+## Integration with Kubernetes
+
+```yaml
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+    - name: app
+      livenessProbe:
+        httpGet:
+          path: /live
+          port: 8080
+        initialDelaySeconds: 10
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /ready
+          port: 8080
+        initialDelaySeconds: 5
+        periodSeconds: 5
+        timeoutSeconds: 3
+        failureThreshold: 2
+```
+
+## Response Format
+
+The `/ready` endpoint returns detailed JSON with check history:
+
+```json
+{
+	"status": "up",
+	"checks": [
+		{
+			"name": "postgres",
+			"state": {
+				"status": "up",
+				"error": "",
+				"timestamp": "2024-01-15T10:30:00Z"
+			},
+			"history": [
+				{
+					"status": "up",
+					"error": "",
+					"timestamp": "2024-01-15T10:29:55Z"
+				}
+			]
+		}
+	]
+}
 ```
