@@ -27,11 +27,13 @@ Health checks are critical for building resilient, self-healing applications in 
 
 ## Features
 
-- Logger to log failed probes
-- Automatic, manual and background checks
-- Respond with all healthchecks status in JSON format
-- Callback for integrate with metrics or other systems
-- Integrated web server
+- **Multiple Check Types**: Basic (sync), Manual, and Background (async) checks for different use cases
+- **Kubernetes Native**: Built-in `/live` and `/ready` endpoints following k8s conventions
+- **JSON Status Reports**: Detailed health status with history for debugging
+- **Metrics Integration**: Callbacks for Prometheus or other monitoring systems
+- **Thread-Safe**: Concurrent-safe operations with proper synchronization
+- **Graceful Shutdown**: Proper cleanup of background checks
+- **Check History**: Last 5 states stored for each check for debugging
 
 ## Quickstart
 
