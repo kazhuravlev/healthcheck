@@ -36,7 +36,7 @@ CheckID:
 
 	switch check := check.(type) {
 	case *bgCheck:
-		check.run()
+		check.run(ctx)
 	}
 
 	s.checks = append(s.checks, checkContainer{
@@ -48,20 +48,22 @@ CheckID:
 // RunAllChecks will run all check immediately.
 func (s *Healthcheck) RunAllChecks(ctx context.Context) Report {
 	s.checksMu.RLock()
-	defer s.checksMu.RUnlock()
+	checksCopy := make([]checkContainer, len(s.checks))
+	copy(checksCopy, s.checks)
+	s.checksMu.RUnlock()
 
-	checks := make([]Check, len(s.checks))
+	checks := make([]Check, len(checksCopy))
 	{
 		wg := new(sync.WaitGroup)
-		wg.Add(len(s.checks))
+		wg.Add(len(checksCopy))
 
 		// TODO(zhuravlev): do not run goroutines for checks like manual and bg check.
-		for i := range s.checks {
+		for i := range checksCopy {
 			go func(i int, check checkContainer) {
 				defer wg.Done()
 
 				checks[i] = s.runCheck(ctx, check)
-			}(i, s.checks[i])
+			}(i, checksCopy[i])
 		}
 
 		wg.Wait()
