@@ -392,3 +392,161 @@ func TestBackgroundCheckStop(t *testing.T) {
 	requireTrue(t, initialCount == finalCount, "background check should not run after Stop()")
 	requireTrue(t, finalCount >= 3, "expected at least 3 calls before stop")
 }
+
+func TestShutdown(t *testing.T) {
+	t.Parallel()
+
+	t.Run("shutdown_with_no_checks", func(t *testing.T) {
+		t.Parallel()
+
+		hcInst, err := hc.New()
+		requireNoError(t, err)
+
+		// Before shutdown - should be up
+		res := hcInst.RunAllChecks(context.Background())
+		requireReportEqual(t, hc.Report{
+			Status: hc.StatusUp,
+			Checks: []hc.Check{},
+		}, res)
+
+		// Call shutdown
+		hcInst.Shutdown()
+
+		// After shutdown - should be down with shutdown check
+		res = hcInst.RunAllChecks(context.Background())
+		requireReportEqual(t, hc.Report{
+			Status: hc.StatusDown,
+			Checks: []hc.Check{
+				{
+					Name: "__shutting_down__",
+					State: hc.CheckState{
+						ActualAt: time.Now(),
+						Status:   hc.StatusDown,
+						Error:    "The application in shutting down process",
+					},
+					Previous: nil,
+				},
+			},
+		}, res)
+	})
+
+	t.Run("shutdown_with_passing_checks", func(t *testing.T) {
+		t.Parallel()
+
+		hcInst := hcWithChecks(t,
+			simpleCheck("check1", nil),
+			simpleCheck("check2", nil),
+		)
+
+		// Before shutdown - should be up
+		res := hcInst.RunAllChecks(context.Background())
+		requireReportEqual(t, hc.Report{
+			Status: hc.StatusUp,
+			Checks: []hc.Check{
+				{Name: "check1", State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusUp, Error: ""}},
+				{Name: "check2", State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusUp, Error: ""}},
+			},
+		}, res)
+
+		// Call shutdown
+		hcInst.Shutdown()
+
+		// After shutdown - should be down with shutdown check
+		res = hcInst.RunAllChecks(context.Background())
+		requireTrue(t, res.Status == hc.StatusDown, "status should be down after shutdown")
+		requireTrue(t, len(res.Checks) == 3, "should have 3 checks after shutdown (2 original + shutdown)")
+
+		// Find shutdown check
+		shutdownCheck := helpFindCheck(t, res.Checks, "__shutting_down__")
+		requireTrue(t, shutdownCheck.State.Status == hc.StatusDown, "shutdown check should be down")
+		requireTrue(t, shutdownCheck.State.Error == "The application in shutting down process", "shutdown check should have correct error message")
+	})
+
+	t.Run("shutdown_with_failing_checks", func(t *testing.T) {
+		t.Parallel()
+
+		hcInst := hcWithChecks(t,
+			simpleCheck("check1", nil),
+			simpleCheck("check2", errors.New("service error")),
+		)
+
+		// Before shutdown - should already be down due to failing check
+		res := hcInst.RunAllChecks(context.Background())
+		requireTrue(t, res.Status == hc.StatusDown, "status should be down due to failing check")
+		requireTrue(t, len(res.Checks) == 2, "should have 2 checks")
+
+		// Call shutdown
+		hcInst.Shutdown()
+
+		// After shutdown - should still be down with shutdown check added
+		res = hcInst.RunAllChecks(context.Background())
+		requireTrue(t, res.Status == hc.StatusDown, "status should be down after shutdown")
+		requireTrue(t, len(res.Checks) == 3, "should have 3 checks after shutdown (2 original + shutdown)")
+
+		// Find shutdown check
+		shutdownCheck := helpFindCheck(t, res.Checks, "__shutting_down__")
+		requireTrue(t, shutdownCheck.State.Status == hc.StatusDown, "shutdown check should be down")
+	})
+
+	t.Run("multiple_shutdown_calls", func(t *testing.T) {
+		t.Parallel()
+
+		hcInst := hcWithChecks(t, simpleCheck("check1", nil))
+
+		// Call shutdown multiple times
+		hcInst.Shutdown()
+		hcInst.Shutdown()
+		hcInst.Shutdown()
+
+		// Should only have one shutdown check
+		res := hcInst.RunAllChecks(context.Background())
+		requireTrue(t, res.Status == hc.StatusDown, "status should be down after shutdown")
+
+		shutdownCheckCount := 0
+		for i := range res.Checks {
+			if res.Checks[i].Name == "__shutting_down__" {
+				shutdownCheckCount++
+			}
+		}
+		requireTrue(t, shutdownCheckCount == 1, "should have exactly one shutdown check")
+	})
+
+	t.Run("shutdown_with_manual_check", func(t *testing.T) {
+		t.Parallel()
+
+		manualCheck := hc.NewManual("manual_check")
+		hcInst := hcWithChecks(t, manualCheck)
+
+		// Set manual check to up
+		manualCheck.SetErr(nil)
+
+		// Before shutdown - should be up
+		res := hcInst.RunAllChecks(context.Background())
+		requireTrue(t, res.Status == hc.StatusUp, "status should be up before shutdown")
+
+		// Call shutdown
+		hcInst.Shutdown()
+
+		// After shutdown - should be down with shutdown check
+		res = hcInst.RunAllChecks(context.Background())
+		requireTrue(t, res.Status == hc.StatusDown, "status should be down after shutdown")
+
+		// Find shutdown check
+		shutdownCheck := helpFindCheck(t, res.Checks, "__shutting_down__")
+		requireTrue(t, shutdownCheck.State.Status == hc.StatusDown, "shutdown check should be down")
+	})
+}
+
+func helpFindCheck(t *testing.T, checks []hc.Check, name string) hc.Check {
+	t.Helper()
+
+	for i := range checks {
+		if checks[i].Name == name {
+			return checks[i]
+		}
+	}
+
+	t.Errorf("check not found: %s", name)
+
+	return hc.Check{}
+}
