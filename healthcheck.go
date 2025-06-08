@@ -9,8 +9,9 @@ import (
 type Healthcheck struct {
 	opts hcOptions
 
-	checksMu *sync.RWMutex
-	checks   []checkContainer
+	checksMu       *sync.RWMutex
+	checks         []checkContainer
+	isShuttingDown bool
 }
 
 func New(opts ...func(*hcOptions)) (*Healthcheck, error) {
