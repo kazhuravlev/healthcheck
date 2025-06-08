@@ -32,7 +32,7 @@ Health checks are critical for building resilient, self-healing applications in 
 - **JSON Status Reports**: Detailed health status with history for debugging
 - **Metrics Integration**: Callbacks for Prometheus or other monitoring systems
 - **Thread-Safe**: Concurrent-safe operations with proper synchronization
-- **Graceful Shutdown**: Proper cleanup of background checks
+- **Graceful Shutdown**: Proper cleanup of background checks and shutdown signaling
 - **Check History**: Last 5 states stored for each check for debugging
 
 ## Installation
@@ -163,7 +163,7 @@ cacheCheck.SetErr(nil)
 // ❌ Bad: Too long timeout blocks readiness. Timeout should less than timeout in k8s
 healthcheck.NewBasic("db", 30*time.Second, checkFunc)
 
-// ✅ Good: Short timeout 
+// ✅ Good: Short timeout
 healthcheck.NewBasic("db", 1*time.Second, checkFunc)
 ```
 
@@ -186,12 +186,52 @@ func checkDatabase(ctx context.Context) error {
     // Use fmt.Errorf to add context. It will be available in /ready report
 	return fmt.Errorf("postgres connection failed: %w", err)
   }
-  
+
   return nil
 }
 ```
 
-### 5. Monitor Checks
+### 5. Graceful Shutdown
+
+For applications that need to signal they are shutting down (preventing new traffic while completing existing requests),
+use the `Shutdown()` method:
+
+```go
+// Create healthcheck instance
+hc, _ := healthcheck.New()
+
+// Register your normal checks
+hc.Register(ctx, healthcheck.NewBasic("database", time.Second, checkDB))
+
+// Start HTTP server
+server, _ := healthcheck.NewServer(hc, healthcheck.WithPort(8080))
+_ = server.Run(ctx)
+
+// In your graceful shutdown handler
+func gracefulShutdown(hc *healthcheck.Healthcheck) {
+  // Mark application as shutting down - /ready will return 500
+  hc.Shutdown()
+
+  // Continue with your normal shutdown process
+  // - Stop accepting new requests
+  // - Complete existing requests
+  // - Close database connections, etc.
+}
+```
+
+**What happens after `Shutdown()`:**
+- `/ready` endpoint immediately returns HTTP 500 with status "down"
+- A special `__shutting_down__` check is added to the response
+- Kubernetes will stop routing new traffic to this pod
+- `/live` endpoint continues to return 200 OK (pod should not be restarted)
+
+**Use this pattern for:**
+- Zero-downtime deployments
+- Graceful pod termination in Kubernetes
+- Maintenance mode activation
+- When you need to drain traffic before shutdown
+
+### 6. Monitor Checks
 
 ```go
 hc, _ := healthcheck.New(
@@ -245,7 +285,7 @@ func main() {
 		"payment-provider",
 		nil,
 		10*time.Second, // initial delay
-		30*time.Second, // check interval  
+		30*time.Second, // check interval
 		5*time.Second,  // timeout
 		checkPaymentProvider,
 	))
@@ -261,6 +301,14 @@ func main() {
 		time.Sleep(5 * time.Second)
 		cacheReady.SetErr(nil)
 		log.Println("Cache warmed up")
+	}()
+
+	// Graceful shutdown example
+	go func() {
+		time.Sleep(30 * time.Second)
+		log.Println("Initiating graceful shutdown...")
+		hc.Shutdown() // /ready will now return 500, stopping new traffic
+		log.Println("Application marked as shutting down")
 	}()
 
 	log.Println("Health checks available at:")
@@ -306,6 +354,7 @@ spec:
 
 The `/ready` endpoint returns detailed JSON with check history:
 
+**Healthy application:**
 ```json
 {
 	"status": "up",
@@ -324,6 +373,32 @@ The `/ready` endpoint returns detailed JSON with check history:
 					"timestamp": "2024-01-15T10:29:55Z"
 				}
 			]
+		}
+	]
+}
+```
+
+**Application shutting down:**
+```json
+{
+	"status": "down",
+	"checks": [
+		{
+			"name": "postgres",
+			"state": {
+				"status": "up",
+				"error": "",
+				"timestamp": "2024-01-15T10:30:00Z"
+			}
+		},
+		{
+			"name": "__shutting_down__",
+			"state": {
+				"status": "down",
+				"error": "The application in shutting down process",
+				"timestamp": "2024-01-15T10:30:05Z"
+			},
+			"history": null
 		}
 	]
 }

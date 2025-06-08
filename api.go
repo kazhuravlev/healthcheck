@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"time"
 )
 
 // Register will register a check.
@@ -50,6 +51,7 @@ func (s *Healthcheck) RunAllChecks(ctx context.Context) Report {
 	s.checksMu.RLock()
 	checksCopy := make([]checkContainer, len(s.checks))
 	copy(checksCopy, s.checks)
+	isShuttingDown := s.isShuttingDown
 	s.checksMu.RUnlock()
 
 	checks := make([]Check, len(checksCopy))
@@ -69,6 +71,17 @@ func (s *Healthcheck) RunAllChecks(ctx context.Context) Report {
 		wg.Wait()
 	}
 
+	if isShuttingDown {
+		checks = append(checks, Check{
+			Name: "__shutting_down__",
+			State: CheckState{
+				ActualAt: time.Now(),
+				Status:   StatusDown,
+				Error:    "The application in shutting down process",
+			},
+			Previous: nil,
+		})
+	}
 	status := StatusUp
 	for _, check := range checks {
 		if check.State.Status == StatusDown {
@@ -81,4 +94,12 @@ func (s *Healthcheck) RunAllChecks(ctx context.Context) Report {
 		Status: status,
 		Checks: checks,
 	}
+}
+
+// Shutdown will disable all checks and set persistent marker that will immidiately return ready = false on all
+// k8s requests. Shutdown should be called immideately after graceful shutdown process started.
+func (s *Healthcheck) Shutdown() {
+	s.checksMu.Lock()
+	s.isShuttingDown = true
+	s.checksMu.Unlock()
 }
