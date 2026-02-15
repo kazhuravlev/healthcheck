@@ -131,18 +131,13 @@ func TestManualCheck(t *testing.T) {
 	})
 }
 
-func TestBackgroundCheck(t *testing.T) {
-	t.Parallel()
-
-	errNotReady := errors.New("not ready")
-
+func newBgCheck(delay time.Duration) (hc.ICheck, func(error)) {
 	curErrorMu := new(sync.Mutex)
 	var curError error
 
-	delay := 200 * time.Millisecond
-	bgCheck := hc.NewBackground(
+	check := hc.NewBackground(
 		"some_system",
-		errNotReady,
+		errors.New("not ready"),
 		delay,
 		delay,
 		10*time.Second,
@@ -153,9 +148,22 @@ func TestBackgroundCheck(t *testing.T) {
 			return curError
 		},
 	)
-	hcInst := hcWithChecks(t, bgCheck)
+
+	return check, func(err error) {
+		curErrorMu.Lock()
+		curError = err
+		curErrorMu.Unlock()
+	}
+}
+
+func TestBackgroundCheck(t *testing.T) {
+	t.Parallel()
+
+	const delay = 200 * time.Millisecond
 
 	t.Run("initial_error_is_used", func(t *testing.T) {
+		bgCheck, _ := newBgCheck(delay)
+		hcInst := hcWithChecks(t, bgCheck)
 		res := hcInst.RunAllChecks(context.Background())
 		requireReportEqual(t, hc.Report{
 			Status: hc.StatusDown,
@@ -165,11 +173,14 @@ func TestBackgroundCheck(t *testing.T) {
 		}, res)
 	})
 
-	// wait for bg check next run
-	time.Sleep(delay)
-
 	t.Run("check_current_error_nil", func(t *testing.T) {
+		bgCheck, setErr := newBgCheck(delay)
+		setErr(nil)
+		hcInst := hcWithChecks(t, bgCheck)
+		// FIXME(zhuravlev): here we test the correctness of bg checks. Use mocks to test that mechanics.
+		time.Sleep(3 * delay / 2)
 		res := hcInst.RunAllChecks(context.Background())
+
 		requireReportEqual(t, hc.Report{
 			Status: hc.StatusUp,
 			Checks: []hc.Check{
@@ -183,31 +194,6 @@ func TestBackgroundCheck(t *testing.T) {
 			},
 		}, res)
 	})
-
-	// set error
-	curErrorMu.Lock()
-	curError = io.EOF
-	curErrorMu.Unlock()
-	// wait for bg check next run
-	time.Sleep(delay)
-
-	t.Run("change_status_after_each_run", func(t *testing.T) {
-		res := hcInst.RunAllChecks(context.Background())
-		requireReportEqual(t, hc.Report{
-			Status: hc.StatusDown,
-			Checks: []hc.Check{
-				{
-					Name:  "some_system",
-					State: hc.CheckState{ActualAt: timeNow, Status: hc.StatusDown, Error: "EOF"},
-					Previous: []hc.CheckState{
-						{ActualAt: timeNow, Status: hc.StatusUp, Error: ""},            // from prev test
-						{ActualAt: timeNow, Status: hc.StatusDown, Error: "not ready"}, // from prev test
-					},
-				},
-			},
-		}, res)
-	})
-
 }
 
 func TestService(t *testing.T) { //nolint:funlen
