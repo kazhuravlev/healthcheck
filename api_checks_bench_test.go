@@ -31,7 +31,7 @@ func BenchmarkApiChecks(b *testing.B) {
 		}
 	})
 
-	b.Run("basic_log", func(b *testing.B) {
+	b.Run("basic_history", func(b *testing.B) {
 		check := NewBasic("bench", time.Second, noErrFn)
 		for i := 0; i < benchHistorySize; i++ {
 			_ = check.check(ctx)
@@ -41,7 +41,7 @@ func BenchmarkApiChecks(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			_ = check.log()
+			_ = check.history()
 		}
 	})
 
@@ -74,7 +74,7 @@ func BenchmarkApiChecks(b *testing.B) {
 		}
 	})
 
-	b.Run("manual_log", func(b *testing.B) {
+	b.Run("manual_history", func(b *testing.B) {
 		check := NewManual("bench")
 		for i := 0; i < benchHistorySize; i++ {
 			check.SetErr(io.EOF)
@@ -84,7 +84,7 @@ func BenchmarkApiChecks(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			_ = check.log()
+			_ = check.history()
 		}
 	})
 
@@ -106,7 +106,7 @@ func BenchmarkApiChecks(b *testing.B) {
 		}
 	})
 
-	b.Run("background_log", func(b *testing.B) {
+	b.Run("background_history", func(b *testing.B) {
 		check := NewBackground("bench", errInitial, time.Millisecond, time.Second, time.Second, noErrFn)
 		for i := 0; i < benchHistorySize; i++ {
 			check.logg.Put(logr.Rec{
@@ -119,7 +119,7 @@ func BenchmarkApiChecks(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			_ = check.log()
+			_ = check.history()
 		}
 	})
 }
