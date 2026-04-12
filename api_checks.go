@@ -48,8 +48,8 @@ func (c *basicCheck) check(ctx context.Context) logr.Rec {
 
 	return res
 }
-func (c *basicCheck) log() []logr.Rec {
-	return c.logg.Slice()
+func (c *basicCheck) history() []CheckState {
+	return history(c.logg)
 }
 
 type manualCheck struct {
@@ -92,8 +92,8 @@ func (c *manualCheck) check(_ context.Context) logr.Rec {
 
 	return rec
 }
-func (c *manualCheck) log() []logr.Rec {
-	return c.logg.Slice()
+func (c *manualCheck) history() []CheckState {
+	return history(c.logg)
 }
 
 type bgCheck struct {
@@ -176,8 +176,8 @@ func (c *bgCheck) check(_ context.Context) logr.Rec {
 
 	return val
 }
-func (c *bgCheck) log() []logr.Rec {
-	return c.logg.Slice()
+func (c *bgCheck) history() []CheckState {
+	return history(c.logg)
 }
 
 func history(ring *logr.Ring) []CheckState {
