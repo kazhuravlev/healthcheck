@@ -130,7 +130,16 @@ func NewBackground(name string, initialErr error, delay, period, timeout time.Du
 
 func (c *bgCheck) run(ctx context.Context) {
 	go func() {
-		time.Sleep(c.delay)
+		if c.delay > 0 {
+			timer := time.NewTimer(c.delay)
+			defer timer.Stop()
+
+			select {
+			case <-ctx.Done():
+				return
+			case <-timer.C:
+			}
+		}
 
 		t := time.NewTicker(c.period)
 		defer t.Stop()
