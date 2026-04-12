@@ -2,13 +2,18 @@ package healthcheck
 
 import (
 	"context"
-	"github.com/kazhuravlev/healthcheck/internal/logr"
-	"github.com/kazhuravlev/just"
 	"strings"
 	"time"
+
+	"github.com/kazhuravlev/healthcheck/internal/logr"
+	"github.com/kazhuravlev/just"
 )
 
 func (s *Healthcheck) runCheck(ctx context.Context, check checkContainer) Check {
+	return runCheckFn(ctx, check, s.opts.setCheckStatus)
+}
+
+func runCheckFn(ctx context.Context, check checkContainer, setCheckStatus ISetCheckStatusFn) Check {
 	ctx, cancel := context.WithTimeout(ctx, check.Check.timeout())
 	defer cancel()
 
@@ -42,7 +47,7 @@ func (s *Healthcheck) runCheck(ctx context.Context, check checkContainer) Check 
 	}
 
 	// TODO(zhuravlev): run on manual and bg checks.
-	s.opts.setCheckStatus(check.ID, status)
+	setCheckStatus(check.ID, status)
 
 	prev := just.SliceMap(check.Check.log(), func(rec logr.Rec) CheckState {
 		status := StatusUp
