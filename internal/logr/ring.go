@@ -1,7 +1,6 @@
 package logr
 
 import (
-	"container/ring"
 	"sync"
 	"time"
 )
@@ -9,14 +8,18 @@ import (
 const maxStatesToStore = 5
 
 type Ring struct {
-	mu   *sync.RWMutex
-	data *ring.Ring
+	mu     sync.RWMutex
+	data   [maxStatesToStore]Rec
+	latest int
+	count  int
 }
 
 func New() *Ring {
 	return &Ring{
-		mu:   new(sync.RWMutex),
-		data: ring.New(maxStatesToStore),
+		mu:     sync.RWMutex{},
+		data:   [5]Rec{},
+		latest: -1,
+		count:  0,
 	}
 }
 
@@ -24,41 +27,50 @@ func (r *Ring) Put(rec Rec) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.data.Value = rec
-	r.data = r.data.Prev()
+	next := 0
+	if r.count > 0 {
+		next = r.latest - 1
+		if next < 0 {
+			next = maxStatesToStore - 1
+		}
+	}
+
+	r.data[next] = rec
+	r.latest = next
+	if r.count < maxStatesToStore {
+		r.count++
+	}
 }
 
 func (r *Ring) GetLast() (Rec, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	last := r.data.Next()
-
-	if last.Value == nil {
+	if r.count == 0 {
 		return Rec{}, false
 	}
 
-	return last.Value.(Rec), true
+	return r.data[r.latest], true
 }
 
-func (r *Ring) SlicePrev() []Rec {
+func (r *Ring) Slice() []Rec {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	res := make([]Rec, 0, r.data.Len())
-	r.data.Do(func(val any) {
-		if val == nil {
-			return
-		}
-
-		res = append(res, val.(Rec))
-	})
-
-	if len(res) == 0 {
+	if r.count <= 1 {
 		return nil
 	}
 
-	return res[1:]
+	res := make([]Rec, 0, r.count-1)
+	for i := 1; i < r.count; i++ {
+		idx := r.latest + i
+		if idx >= maxStatesToStore {
+			idx -= maxStatesToStore
+		}
+		res = append(res, r.data[idx])
+	}
+
+	return res
 }
 
 type Rec struct {

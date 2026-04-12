@@ -1,0 +1,18 @@
+version: '3'
+
+tasks:
+  tests:
+    desc: Run Go tests
+    cmds:
+      - go test ./...
+
+  bench:
+    desc: Run Go benchmarks
+    cmds:
+      - go test -run '^$' -bench . -benchmem ./...
+
+  check:
+    desc: Run tests and benchmarks
+    deps:
+      - tests
+      - bench

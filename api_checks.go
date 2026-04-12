@@ -3,8 +3,9 @@ package healthcheck
 import (
 	"context"
 	"errors"
-	"github.com/kazhuravlev/healthcheck/internal/logr"
 	"time"
+
+	"github.com/kazhuravlev/healthcheck/internal/logr"
 )
 
 var (
@@ -48,7 +49,7 @@ func (c *basicCheck) check(ctx context.Context) logr.Rec {
 	return res
 }
 func (c *basicCheck) log() []logr.Rec {
-	return c.logg.SlicePrev()
+	return c.logg.Slice()
 }
 
 type manualCheck struct {
@@ -92,7 +93,7 @@ func (c *manualCheck) check(_ context.Context) logr.Rec {
 	return rec
 }
 func (c *manualCheck) log() []logr.Rec {
-	return c.logg.SlicePrev()
+	return c.logg.Slice()
 }
 
 type bgCheck struct {
@@ -170,5 +171,5 @@ func (c *bgCheck) check(_ context.Context) logr.Rec {
 	return val
 }
 func (c *bgCheck) log() []logr.Rec {
-	return c.logg.SlicePrev()
+	return c.logg.Slice()
 }

@@ -40,39 +40,45 @@ CheckID:
 		check.run(ctx)
 	}
 
-	s.checks = append(s.checks, checkContainer{
+	// Publish a fresh slice so RunAllChecks can safely use the current snapshot
+	// after dropping the read lock without taking an additional full-slice copy.
+	nextChecks := make([]checkContainer, len(s.checks)+1)
+	copy(nextChecks, s.checks)
+	nextChecks[len(s.checks)] = checkContainer{
 		ID:    checkID,
 		Check: check,
-	})
+	}
+	s.checks = nextChecks
 }
 
 // RunAllChecks will run all check immediately.
 func (s *Healthcheck) RunAllChecks(ctx context.Context) Report {
 	s.checksMu.RLock()
-	checksCopy := make([]checkContainer, len(s.checks))
-	copy(checksCopy, s.checks)
+	// checks is a stable snapshot after unlock because Register publishes a new
+	// backing array instead of mutating the previously published slice in place.
+	checks := s.checks
 	isShuttingDown := s.isShuttingDown
 	s.checksMu.RUnlock()
 
-	checks := make([]Check, len(checksCopy))
+	reportChecks := make([]Check, len(checks))
 	{
 		wg := new(sync.WaitGroup)
-		wg.Add(len(checksCopy))
+		wg.Add(len(checks))
 
 		// TODO(zhuravlev): do not run goroutines for checks like manual and bg check.
-		for i := range checksCopy {
+		for i := range checks {
 			go func(i int, check checkContainer) {
 				defer wg.Done()
 
-				checks[i] = s.runCheck(ctx, check)
-			}(i, checksCopy[i])
+				reportChecks[i] = s.runCheck(ctx, check)
+			}(i, checks[i])
 		}
 
 		wg.Wait()
 	}
 
 	if isShuttingDown {
-		checks = append(checks, Check{
+		reportChecks = append(reportChecks, Check{
 			Name: "__shutting_down__",
 			State: CheckState{
 				ActualAt: time.Now(),
@@ -83,7 +89,7 @@ func (s *Healthcheck) RunAllChecks(ctx context.Context) Report {
 		})
 	}
 	status := StatusUp
-	for _, check := range checks {
+	for _, check := range reportChecks {
 		if check.State.Status == StatusDown {
 			status = StatusDown
 			break
@@ -92,7 +98,7 @@ func (s *Healthcheck) RunAllChecks(ctx context.Context) Report {
 
 	return Report{
 		Status: status,
-		Checks: checks,
+		Checks: reportChecks,
 	}
 }
 

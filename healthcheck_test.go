@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -286,6 +287,40 @@ func TestService(t *testing.T) { //nolint:funlen
 			},
 		}, res)
 	})
+}
+
+func TestRunAllChecksConcurrentRegister(t *testing.T) {
+	t.Parallel()
+
+	hcInst, err := hc.New()
+	requireNoError(t, err)
+
+	ctx := context.Background()
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		for i := range 50 {
+			hcInst.Register(ctx, simpleCheck("check_"+strconv.Itoa(i), nil))
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+	
+		for range 50 {
+			report := hcInst.RunAllChecks(ctx)
+			requireTrue(t, len(report.Checks) <= 50, "unexpected checks count: %d", len(report.Checks))
+		}
+	}()
+
+	wg.Wait()
+
+	report := hcInst.RunAllChecks(ctx)
+	requireTrue(t, len(report.Checks) == 50, "unexpected final checks count: %d", len(report.Checks))
 }
 
 func TestPrevious(t *testing.T) { //nolint:funlen
