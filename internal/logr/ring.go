@@ -53,7 +53,7 @@ func (r *Ring) GetLast() (Rec, bool) {
 	return r.data[r.latest], true
 }
 
-func (r *Ring) SlicePrev() []Rec {
+func (r *Ring) Slice() []Rec {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
