@@ -75,7 +75,7 @@ func TestRingSlicePrev(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
 		t.Parallel()
 
-		assert.Nil(t, New().Slice())
+		assert.Nil(t, New().SliceTail())
 	})
 
 	t.Run("single", func(t *testing.T) {
@@ -84,7 +84,7 @@ func TestRingSlicePrev(t *testing.T) {
 		r := New()
 		r.Put(testRec(1))
 
-		assert.Nil(t, r.Slice())
+		assert.Nil(t, r.SliceTail())
 	})
 
 	t.Run("multiple", func(t *testing.T) {
@@ -96,7 +96,7 @@ func TestRingSlicePrev(t *testing.T) {
 			r.Put(rec)
 		}
 
-		prev := r.Slice()
+		prev := r.SliceTail()
 		require.Len(t, prev, 2)
 
 		requireRecEqual(t, recs[1], prev[0])
@@ -119,7 +119,7 @@ func TestRingWrapAround(t *testing.T) {
 	require.True(t, ok)
 	requireRecEqual(t, recs[len(recs)-1], last)
 
-	prev := r.Slice()
+	prev := r.SliceTail()
 	require.Len(t, prev, maxStatesToStore-1)
 
 	expected := []Rec{
@@ -160,7 +160,7 @@ func TestRingRotatesAfterMaxStatesToStore(t *testing.T) {
 		recs[maxStatesToStore-3],
 		recs[maxStatesToStore-4],
 	}
-	res := r.Slice()
+	res := r.SliceTail()
 	require.Len(t, res, maxStatesToStore-1)
 	for i := range expected {
 		requireRecEqual(t, expected[i], res[i])

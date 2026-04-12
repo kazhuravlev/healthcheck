@@ -57,7 +57,9 @@ func (r *Ring) GetLast() (Rec, bool) {
 	return r.data[r.latest], true
 }
 
-func (r *Ring) Slice() []Rec {
+// SliceTail returns older records from newest to oldest.
+// It does not include the latest record.
+func (r *Ring) SliceTail() []Rec {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
