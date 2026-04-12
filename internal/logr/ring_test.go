@@ -104,6 +104,123 @@ func TestRingSlicePrev(t *testing.T) {
 	})
 }
 
+func TestRingCountTail(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+
+		assert.Zero(t, New().CountTail())
+	})
+
+	t.Run("single", func(t *testing.T) {
+		t.Parallel()
+
+		r := New()
+		r.Put(testRec(1))
+
+		assert.Zero(t, r.CountTail())
+	})
+
+	t.Run("multiple", func(t *testing.T) {
+		t.Parallel()
+
+		r := New()
+		r.Put(testRec(1))
+		r.Put(testRec(2))
+		r.Put(testRec(3))
+
+		assert.Equal(t, 2, r.CountTail())
+	})
+
+	t.Run("wrap_around", func(t *testing.T) {
+		t.Parallel()
+
+		r := New()
+		for i := 0; i < maxStatesToStore+2; i++ {
+			r.Put(testRec(i))
+		}
+
+		assert.Equal(t, maxStatesToStore-1, r.CountTail())
+	})
+}
+
+func TestRingForEachTail(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+
+		var got []Rec
+		New().ForEachTail(func(rec Rec) {
+			got = append(got, rec)
+		})
+
+		assert.Nil(t, got)
+	})
+
+	t.Run("single", func(t *testing.T) {
+		t.Parallel()
+
+		r := New()
+		r.Put(testRec(1))
+
+		var got []Rec
+		r.ForEachTail(func(rec Rec) {
+			got = append(got, rec)
+		})
+
+		assert.Nil(t, got)
+	})
+
+	t.Run("multiple", func(t *testing.T) {
+		t.Parallel()
+
+		r := New()
+		recs := []Rec{testRec(1), testRec(2), testRec(3)}
+		for _, rec := range recs {
+			r.Put(rec)
+		}
+
+		var got []Rec
+		r.ForEachTail(func(rec Rec) {
+			got = append(got, rec)
+		})
+
+		require.Len(t, got, 2)
+		requireRecEqual(t, recs[1], got[0])
+		requireRecEqual(t, recs[0], got[1])
+	})
+
+	t.Run("wrap_around", func(t *testing.T) {
+		t.Parallel()
+
+		r := New()
+		recs := make([]Rec, 0, maxStatesToStore+2)
+		for i := 0; i < maxStatesToStore+2; i++ {
+			rec := testRec(i)
+			recs = append(recs, rec)
+			r.Put(rec)
+		}
+
+		var got []Rec
+		r.ForEachTail(func(rec Rec) {
+			got = append(got, rec)
+		})
+
+		expected := []Rec{
+			recs[len(recs)-2],
+			recs[len(recs)-3],
+			recs[len(recs)-4],
+			recs[len(recs)-5],
+		}
+		require.Len(t, got, len(expected))
+		for i := range expected {
+			requireRecEqual(t, expected[i], got[i])
+		}
+	})
+}
+
 func TestRingWrapAround(t *testing.T) {
 	t.Parallel()
 

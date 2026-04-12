@@ -79,6 +79,34 @@ func (r *Ring) SliceTail() []Rec {
 	return res
 }
 
+// CountTail returns how many older records are stored.
+// It does not count the latest record.
+func (r *Ring) CountTail() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if r.count <= 1 {
+		return 0
+	}
+
+	return r.count - 1
+}
+
+// ForEachTail calls fn for each older record.
+// Records are passed from newest to oldest.
+func (r *Ring) ForEachTail(fn func(Rec)) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for i := 1; i < r.count; i++ {
+		idx := r.latest + i
+		if idx >= maxStatesToStore {
+			idx -= maxStatesToStore
+		}
+		fn(r.data[idx])
+	}
+}
+
 type Rec struct {
 	Time  time.Time
 	Error error
