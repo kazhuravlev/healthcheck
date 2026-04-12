@@ -57,7 +57,7 @@ type manualCheck struct {
 	logg *logr.Ring
 }
 
-// NewManual create new check, that can be managed by client. Marked as failed by default.
+// NewManual create new check, that client can manage. Marked as failed by default.
 //
 //	hc, _ := healthcheck.New(...)
 //	check := healthcheck.NewManual("some_subsystem")
