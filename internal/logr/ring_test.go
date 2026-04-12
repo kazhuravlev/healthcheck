@@ -132,3 +132,37 @@ func TestRingWrapAround(t *testing.T) {
 		requireRecEqual(t, expected[i], prev[i])
 	}
 }
+
+func TestRingRotatesAfterMaxStatesToStore(t *testing.T) {
+	t.Parallel()
+
+	recs := []Rec{
+		testRec(0),
+		testRec(1),
+		testRec(2),
+		testRec(3),
+		testRec(4),
+		testRec(5),
+	}
+
+	r := New()
+	for _, rec := range recs {
+		r.Put(rec)
+	}
+
+	last, ok := r.GetLast()
+	require.True(t, ok)
+	requireRecEqual(t, recs[len(recs)-1], last)
+
+	expected := []Rec{
+		recs[maxStatesToStore-1],
+		recs[maxStatesToStore-2],
+		recs[maxStatesToStore-3],
+		recs[maxStatesToStore-4],
+	}
+	res := r.SlicePrev()
+	require.Len(t, res, maxStatesToStore-1)
+	for i := range expected {
+		requireRecEqual(t, expected[i], res[i])
+	}
+}
