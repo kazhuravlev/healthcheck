@@ -14,6 +14,7 @@ type Ring struct {
 	count  int
 }
 
+// New creates an empty ring for recent records.
 func New() *Ring {
 	return &Ring{
 		mu:     sync.RWMutex{},
@@ -23,6 +24,7 @@ func New() *Ring {
 	}
 }
 
+// Put saves a record as the latest one.
 func (r *Ring) Put(rec Rec) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -42,6 +44,8 @@ func (r *Ring) Put(rec Rec) {
 	}
 }
 
+// GetLast returns the latest record.
+// It returns false when the ring is empty.
 func (r *Ring) GetLast() (Rec, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
