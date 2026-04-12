@@ -14,6 +14,7 @@ type Ring struct {
 	count  int
 }
 
+// New creates an empty ring for recent records.
 func New() *Ring {
 	return &Ring{
 		mu:     sync.RWMutex{},
@@ -23,6 +24,7 @@ func New() *Ring {
 	}
 }
 
+// Put saves a record as the latest one.
 func (r *Ring) Put(rec Rec) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -42,6 +44,8 @@ func (r *Ring) Put(rec Rec) {
 	}
 }
 
+// GetLast returns the latest record.
+// It returns false when the ring is empty.
 func (r *Ring) GetLast() (Rec, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -53,7 +57,9 @@ func (r *Ring) GetLast() (Rec, bool) {
 	return r.data[r.latest], true
 }
 
-func (r *Ring) Slice() []Rec {
+// SliceTail returns older records from newest to oldest.
+// It does not include the latest record.
+func (r *Ring) SliceTail() []Rec {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -71,6 +77,34 @@ func (r *Ring) Slice() []Rec {
 	}
 
 	return res
+}
+
+// CountTail returns how many older records are stored.
+// It does not count the latest record.
+func (r *Ring) CountTail() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if r.count <= 1 {
+		return 0
+	}
+
+	return r.count - 1
+}
+
+// ForEachTail calls fn for each older record.
+// Records are passed from newest to oldest.
+func (r *Ring) ForEachTail(fn func(Rec)) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for i := 1; i < r.count; i++ {
+		idx := r.latest + i
+		if idx >= maxStatesToStore {
+			idx -= maxStatesToStore
+		}
+		fn(r.data[idx])
+	}
 }
 
 type Rec struct {

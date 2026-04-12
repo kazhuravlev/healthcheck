@@ -48,8 +48,8 @@ func (c *basicCheck) check(ctx context.Context) logr.Rec {
 
 	return res
 }
-func (c *basicCheck) log() []logr.Rec {
-	return c.logg.Slice()
+func (c *basicCheck) history() []CheckState {
+	return history(c.logg)
 }
 
 type manualCheck struct {
@@ -57,7 +57,7 @@ type manualCheck struct {
 	logg *logr.Ring
 }
 
-// NewManual create new check, that can be managed by client. Marked as failed by default.
+// NewManual create new check, that client can manage. Marked as failed by default.
 //
 //	hc, _ := healthcheck.New(...)
 //	check := healthcheck.NewManual("some_subsystem")
@@ -92,8 +92,8 @@ func (c *manualCheck) check(_ context.Context) logr.Rec {
 
 	return rec
 }
-func (c *manualCheck) log() []logr.Rec {
-	return c.logg.Slice()
+func (c *manualCheck) history() []CheckState {
+	return history(c.logg)
 }
 
 type bgCheck struct {
@@ -130,23 +130,29 @@ func NewBackground(name string, initialErr error, delay, period, timeout time.Du
 
 func (c *bgCheck) run(ctx context.Context) {
 	go func() {
-		time.Sleep(c.delay)
+		if c.delay > 0 {
+			timer := time.NewTimer(c.delay)
+			defer timer.Stop()
+
+			select {
+			case <-ctx.Done():
+				return
+			case <-timer.C:
+			}
+		}
 
 		t := time.NewTicker(c.period)
 		defer t.Stop()
 
 		for {
-			func() {
-				ctx, cancel := context.WithTimeout(ctx, c.ttl)
-				defer cancel()
+			runCtx, cancel := context.WithTimeout(ctx, c.ttl)
+			err := c.fn(runCtx)
+			cancel()
 
-				err := c.fn(ctx)
-
-				c.logg.Put(logr.Rec{
-					Time:  time.Now(),
-					Error: err,
-				})
-			}()
+			c.logg.Put(logr.Rec{
+				Time:  time.Now(),
+				Error: err,
+			})
 
 			select {
 			case <-ctx.Done():
@@ -170,6 +176,31 @@ func (c *bgCheck) check(_ context.Context) logr.Rec {
 
 	return val
 }
-func (c *bgCheck) log() []logr.Rec {
-	return c.logg.Slice()
+func (c *bgCheck) history() []CheckState {
+	return history(c.logg)
+}
+
+func history(ring *logr.Ring) []CheckState {
+	n := ring.CountTail()
+	if n == 0 {
+		return nil
+	}
+
+	prev := make([]CheckState, 0, n)
+	ring.ForEachTail(func(rec logr.Rec) {
+		status := StatusUp
+		errText := ""
+		if rec.Error != nil {
+			status = StatusDown
+			errText = rec.Error.Error()
+		}
+
+		prev = append(prev, CheckState{
+			ActualAt: rec.Time,
+			Status:   status,
+			Error:    errText,
+		})
+	})
+
+	return prev
 }

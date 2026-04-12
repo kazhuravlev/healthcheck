@@ -19,7 +19,7 @@ func TestManualCheck2(t *testing.T) {
 		require.Equal(t, "sample", check.id())
 		require.Equal(t, time.Hour, check.timeout())
 		require.ErrorIs(t, check.check(context.TODO()).Error, errInitial)
-		require.Len(t, check.log(), 0)
+		require.Len(t, check.history(), 0)
 	})
 
 	t.Run("set_and_unset_error", func(t *testing.T) {
@@ -35,11 +35,13 @@ func TestManualCheck2(t *testing.T) {
 		require.ErrorIs(t, check.check(context.TODO()).Error, io.EOF)
 
 		t.Run("check_logs", func(t *testing.T) {
-			records := check.log()
+			records := check.history()
 			require.Len(t, records, 2)
 
-			require.NoError(t, records[0].Error)
-			require.ErrorIs(t, records[1].Error, errInitial)
+			require.Equal(t, StatusUp, records[0].Status)
+			require.Empty(t, records[0].Error)
+			require.Equal(t, StatusDown, records[1].Status)
+			require.Equal(t, errInitial.Error(), records[1].Error)
 		})
 	})
 }

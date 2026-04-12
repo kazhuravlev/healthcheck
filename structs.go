@@ -36,7 +36,7 @@ type ICheck interface {
 	id() string
 	check(ctx context.Context) logr.Rec
 	timeout() time.Duration
-	log() []logr.Rec
+	history() []CheckState
 }
 
 type checkContainer struct {

@@ -28,25 +28,6 @@ func runCheckFn(ctx context.Context, check checkContainer, setCheckStatus ISetCh
 	// TODO(zhuravlev): run on manual and bg checks.
 	setCheckStatus(check.ID, status)
 
-	logs := check.Check.log()
-	var prev []CheckState
-	if len(logs) > 0 {
-		prev = make([]CheckState, len(logs))
-		for i, rec := range logs {
-			prevStatus := StatusUp
-			prevErrText := ""
-			if rec.Error != nil {
-				prevStatus = StatusDown
-				prevErrText = rec.Error.Error()
-			}
-			prev[i] = CheckState{
-				ActualAt: rec.Time,
-				Status:   prevStatus,
-				Error:    prevErrText,
-			}
-		}
-	}
-
 	return Check{
 		Name: check.ID,
 		State: CheckState{
@@ -54,7 +35,7 @@ func runCheckFn(ctx context.Context, check checkContainer, setCheckStatus ISetCh
 			Status:   status,
 			Error:    errText,
 		},
-		Previous: prev,
+		Previous: check.Check.history(),
 	}
 }
 
