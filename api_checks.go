@@ -136,17 +136,14 @@ func (c *bgCheck) run(ctx context.Context) {
 		defer t.Stop()
 
 		for {
-			func() {
-				ctx, cancel := context.WithTimeout(ctx, c.ttl)
-				defer cancel()
+			runCtx, cancel := context.WithTimeout(ctx, c.ttl)
+			err := c.fn(runCtx)
+			cancel()
 
-				err := c.fn(ctx)
-
-				c.logg.Put(logr.Rec{
-					Time:  time.Now(),
-					Error: err,
-				})
-			}()
+			c.logg.Put(logr.Rec{
+				Time:  time.Now(),
+				Error: err,
+			})
 
 			select {
 			case <-ctx.Done():
