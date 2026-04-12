@@ -298,18 +298,24 @@ func TestRunAllChecksConcurrentRegister(t *testing.T) {
 	ctx := context.Background()
 	var wg sync.WaitGroup
 
-	wg.Go(func() {
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
 		for i := range 50 {
 			hcInst.Register(ctx, simpleCheck("check_"+strconv.Itoa(i), nil))
 		}
-	})
+	}()
 
-	wg.Go(func() {
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+	
 		for range 50 {
 			report := hcInst.RunAllChecks(ctx)
 			requireTrue(t, len(report.Checks) <= 50, "unexpected checks count: %d", len(report.Checks))
 		}
-	})
+	}()
 
 	wg.Wait()
 
