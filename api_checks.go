@@ -179,3 +179,28 @@ func (c *bgCheck) check(_ context.Context) logr.Rec {
 func (c *bgCheck) log() []logr.Rec {
 	return c.logg.Slice()
 }
+
+func history(ring *logr.Ring) []CheckState {
+	n := ring.CountTail()
+	if n == 0 {
+		return nil
+	}
+
+	prev := make([]CheckState, 0, n)
+	ring.ForEachTail(func(rec logr.Rec) {
+		status := StatusUp
+		errText := ""
+		if rec.Error != nil {
+			status = StatusDown
+			errText = rec.Error.Error()
+		}
+
+		prev = append(prev, CheckState{
+			ActualAt: rec.Time,
+			Status:   status,
+			Error:    errText,
+		})
+	})
+
+	return prev
+}
