@@ -40,10 +40,15 @@ CheckID:
 		check.run(ctx)
 	}
 
-	s.checks = append(s.checks, checkContainer{
+	// Publish a fresh slice so RunAllChecks can safely use the current snapshot
+	// after dropping the read lock without taking an additional full-slice copy.
+	nextChecks := make([]checkContainer, len(s.checks)+1)
+	copy(nextChecks, s.checks)
+	nextChecks[len(s.checks)] = checkContainer{
 		ID:    checkID,
 		Check: check,
-	})
+	}
+	s.checks = nextChecks
 }
 
 // RunAllChecks will run all check immediately.
